@@ -6,7 +6,12 @@ import { useAuth } from '@/context/AuthContext';
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, debugSkipAuth } = useAuth();
+
+  const handleDebugSkip = async () => {
+    await debugSkipAuth();
+    router.replace('/(tabs)');
+  };
 
   useEffect(() => {
     // If user is already authenticated, go to home
@@ -64,6 +69,14 @@ export default function WelcomeScreen() {
         onPress={() => router.push('/signin')}
       >
         <Text style={styles.signInText}>Already have an account? Sign in</Text>
+      </TouchableOpacity>
+
+      {/* Debug skip button */}
+      <TouchableOpacity
+        style={styles.debugButton}
+        onPress={handleDebugSkip}
+      >
+        <Text style={styles.debugText}>Skip to App (Debug)</Text>
       </TouchableOpacity>
 
       {/* Decorative scribbles bottom */}
@@ -179,5 +192,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: WaffleColors.charcoal,
     textDecorationLine: 'underline',
+  },
+  debugButton: {
+    marginTop: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: WaffleColors.dustGrey,
+    borderRadius: 8,
+  },
+  debugText: {
+    fontSize: 12,
+    color: WaffleColors.charcoal,
   },
 });

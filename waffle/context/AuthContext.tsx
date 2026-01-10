@@ -10,6 +10,7 @@ interface AuthContextType {
   signUp: (data: SignUpData) => Promise<{ success: boolean; message: string }>;
   signIn: (data: SignInData) => Promise<{ success: boolean; message: string }>;
   signOut: () => Promise<void>;
+  debugSkipAuth: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -101,6 +102,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await storage.removeItem(USER_STORAGE_KEY);
   };
 
+  const debugSkipAuth = async () => {
+    const fakeUser: User = {
+      id: 'debug-user-123',
+      name: 'Debug User',
+      email: 'debug@waffle.app',
+      emoji: '🧇',
+    };
+    setUser(fakeUser);
+    await storage.setItem(USER_STORAGE_KEY, JSON.stringify(fakeUser));
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -110,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signUp,
         signIn,
         signOut,
+        debugSkipAuth,
       }}
     >
       {children}
