@@ -1,9 +1,28 @@
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { useEffect } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { WaffleColors } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    // If user is already authenticated, go to home
+    if (!isLoading && isAuthenticated) {
+      router.replace('/(tabs)');
+    }
+  }, [isLoading, isAuthenticated]);
+
+  // Show loading while checking auth state
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={WaffleColors.yellow} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -42,7 +61,7 @@ export default function WelcomeScreen() {
       {/* Sign in link */}
       <TouchableOpacity
         style={styles.signInButton}
-        onPress={() => router.push('/(tabs)')}
+        onPress={() => router.push('/signin')}
       >
         <Text style={styles.signInText}>Already have an account? Sign in</Text>
       </TouchableOpacity>
@@ -62,6 +81,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: WaffleColors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scribbleTop: {
     position: 'absolute',

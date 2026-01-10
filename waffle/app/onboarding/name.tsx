@@ -1,11 +1,65 @@
 import { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { WaffleColors } from '@/constants/theme';
+import { useOnboarding } from '@/context/OnboardingContext';
+
+// Simple client-side profanity check
+const profanityList = [
+  'ass', 'asshole', 'bastard', 'bitch', 'bollocks', 'bullshit', 'cock', 'crap',
+  'cunt', 'damn', 'dick', 'douche', 'fag', 'fuck', 'goddamn', 'hell', 'homo',
+  'jerk', 'nigger', 'nigga', 'piss', 'prick', 'pussy', 'retard', 'shit', 'slut',
+  'twat', 'whore', 'wanker',
+];
+
+function containsProfanity(name: string): boolean {
+  const lowerName = name.toLowerCase().replace(/[^a-z]/g, '');
+  return profanityList.some((word) => lowerName.includes(word));
+}
 
 export default function NameScreen() {
   const router = useRouter();
-  const [name, setName] = useState('');
+  const { data, updateData } = useOnboarding();
+  const [name, setName] = useState(data.name);
+  const [error, setError] = useState('');
+
+  const handleContinue = () => {
+    // Validate name
+    const trimmedName = name.trim();
+
+    if (!trimmedName) {
+      setError('Please enter your name');
+      return;
+    }
+
+    if (trimmedName.length < 2) {
+      setError('Name must be at least 2 characters');
+      return;
+    }
+
+    if (trimmedName.length > 50) {
+      setError('Name cannot exceed 50 characters');
+      return;
+    }
+
+    if (containsProfanity(trimmedName)) {
+      setError('Please choose an appropriate name');
+      return;
+    }
+
+    // Save and continue
+    updateData({ name: trimmedName });
+    router.push('/onboarding/email');
+  };
 
   return (
     <KeyboardAvoidingView
@@ -17,15 +71,14 @@ export default function NameScreen() {
         <View style={[styles.progressDot, styles.progressDotActive]} />
         <View style={styles.progressDot} />
         <View style={styles.progressDot} />
+        <View style={styles.progressDot} />
       </View>
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.stepLabel}>Step 1 of 3</Text>
+        <Text style={styles.stepLabel}>Step 1 of 4</Text>
         <Text style={styles.title}>What's your name?</Text>
-        <Text style={styles.subtitle}>
-          This is how your friends will see you
-        </Text>
+        <Text style={styles.subtitle}>This is how your friends will see you</Text>
       </View>
 
       {/* Input */}
@@ -35,10 +88,16 @@ export default function NameScreen() {
           placeholder="Enter your name"
           placeholderTextColor={WaffleColors.charcoal}
           value={name}
-          onChangeText={setName}
+          onChangeText={(text) => {
+            setName(text);
+            setError('');
+          }}
           autoFocus
+          autoCapitalize="words"
+          autoCorrect={false}
         />
-        <View style={styles.inputUnderline} />
+        <View style={[styles.inputUnderline, error && styles.inputUnderlineError]} />
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </View>
 
       {/* Decorative scribble */}
@@ -48,8 +107,8 @@ export default function NameScreen() {
 
       {/* Continue button */}
       <TouchableOpacity
-        style={styles.continueButton}
-        onPress={() => router.push('/onboarding/photo')}
+        style={[styles.continueButton, !name.trim() && styles.continueButtonDisabled]}
+        onPress={handleContinue}
         activeOpacity={0.8}
       >
         <Text style={styles.continueText}>Continue</Text>
@@ -71,7 +130,7 @@ const styles = StyleSheet.create({
     marginBottom: 48,
   },
   progressDot: {
-    width: 40,
+    width: 32,
     height: 6,
     borderRadius: 3,
     backgroundColor: WaffleColors.dustGrey,
@@ -115,6 +174,14 @@ const styles = StyleSheet.create({
     backgroundColor: WaffleColors.carbonBlack,
     borderRadius: 2,
   },
+  inputUnderlineError: {
+    backgroundColor: '#e53935',
+  },
+  errorText: {
+    color: '#e53935',
+    fontSize: 14,
+    marginTop: 8,
+  },
   scribbleContainer: {
     alignItems: 'center',
     marginVertical: 24,
@@ -137,6 +204,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 3, height: 3 },
     shadowOpacity: 1,
     shadowRadius: 0,
+  },
+  continueButtonDisabled: {
+    opacity: 0.6,
   },
   continueText: {
     fontSize: 18,

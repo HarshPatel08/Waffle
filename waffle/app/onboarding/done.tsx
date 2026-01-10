@@ -1,10 +1,162 @@
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { useState, useEffect } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { WaffleColors } from '@/constants/theme';
+import { useOnboarding } from '@/context/OnboardingContext';
+import { useAuth } from '@/context/AuthContext';
 
 export default function DoneScreen() {
   const router = useRouter();
+  const { data, resetData } = useOnboarding();
+  const { signUp } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const [isCreated, setIsCreated] = useState(false);
+  const [error, setError] = useState('');
 
+  const handleCreateAccount = async () => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const result = await signUp({
+        name: data.name,
+        email: data.email,
+        password: data.password,
+        emoji: data.emoji,
+      });
+
+      if (result.success) {
+        setIsCreated(true);
+        resetData();
+      } else {
+        setError(result.message);
+      }
+    } catch (err) {
+      setError('Failed to create account. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleStart = () => {
+    router.replace('/(tabs)');
+  };
+
+  // Show loading/creating state
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <View style={styles.loadingContent}>
+          <ActivityIndicator size="large" color={WaffleColors.yellow} />
+          <Text style={styles.loadingText}>Creating your account...</Text>
+          <Text style={styles.loadingScribble}>{"~ almost there ~"}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.celebrationContainer}>
+          <View style={[styles.emojiContainer, styles.emojiContainerError]}>
+            <Text style={styles.celebrationEmoji}>😕</Text>
+          </View>
+          <Text style={styles.title}>Oops!</Text>
+          <Text style={styles.subtitle}>{error}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.startButton}
+          onPress={handleCreateAccount}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.startText}>Try Again</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.backLink}
+          onPress={() => router.back()}
+        >
+          <Text style={styles.backLinkText}>← Go back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Show success/ready state
+  if (isCreated) {
+    return (
+      <View style={styles.container}>
+        {/* Progress indicator */}
+        <View style={styles.progressContainer}>
+          <View style={[styles.progressDot, styles.progressDotActive]} />
+          <View style={[styles.progressDot, styles.progressDotActive]} />
+          <View style={[styles.progressDot, styles.progressDotActive]} />
+          <View style={[styles.progressDot, styles.progressDotActive]} />
+        </View>
+
+        {/* Celebration */}
+        <View style={styles.celebrationContainer}>
+          <View style={styles.emojiContainer}>
+            <Text style={styles.celebrationEmoji}>🎉</Text>
+          </View>
+          <Text style={styles.title}>You're all set!</Text>
+          <Text style={styles.subtitle}>
+            Welcome to Waffle, {data.name || 'friend'}!{'\n'}Start sharing life moments.
+          </Text>
+        </View>
+
+        {/* Features preview */}
+        <View style={styles.featuresContainer}>
+          <View style={styles.featureItem}>
+            <View style={styles.featureIcon}>
+              <Text style={styles.featureEmoji}>📹</Text>
+            </View>
+            <View style={styles.featureText}>
+              <Text style={styles.featureTitle}>Record daily vlogs</Text>
+              <Text style={styles.featureDesc}>1-2 minute life updates</Text>
+            </View>
+          </View>
+
+          <View style={styles.featureItem}>
+            <View style={styles.featureIcon}>
+              <Text style={styles.featureEmoji}>👥</Text>
+            </View>
+            <View style={styles.featureText}>
+              <Text style={styles.featureTitle}>Share with groups</Text>
+              <Text style={styles.featureDesc}>Keep close friends in the loop</Text>
+            </View>
+          </View>
+
+          <View style={styles.featureItem}>
+            <View style={styles.featureIcon}>
+              <Text style={styles.featureEmoji}>✨</Text>
+            </View>
+            <View style={styles.featureText}>
+              <Text style={styles.featureTitle}>AI weekly recaps</Text>
+              <Text style={styles.featureDesc}>Never miss a moment</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Scribble decoration */}
+        <Text style={styles.scribble}>{"~ let's go! ~"}</Text>
+
+        {/* Start button */}
+        <TouchableOpacity
+          style={styles.startButton}
+          onPress={handleStart}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.startText}>Start Waffling</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Initial state - prompt to create account
   return (
     <View style={styles.container}>
       {/* Progress indicator */}
@@ -12,62 +164,49 @@ export default function DoneScreen() {
         <View style={[styles.progressDot, styles.progressDotActive]} />
         <View style={[styles.progressDot, styles.progressDotActive]} />
         <View style={[styles.progressDot, styles.progressDotActive]} />
+        <View style={[styles.progressDot, styles.progressDotActive]} />
       </View>
 
-      {/* Celebration */}
+      {/* Back button */}
+      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <Text style={styles.backText}>← Back</Text>
+      </TouchableOpacity>
+
+      {/* Ready state */}
       <View style={styles.celebrationContainer}>
         <View style={styles.emojiContainer}>
-          <Text style={styles.celebrationEmoji}>🎉</Text>
+          <Text style={styles.celebrationEmoji}>🧇</Text>
         </View>
-        <Text style={styles.title}>You're all set!</Text>
+        <Text style={styles.title}>Ready to join?</Text>
         <Text style={styles.subtitle}>
-          Welcome to Waffle. Start sharing{'\n'}life moments with your friends.
+          Create your account and start{'\n'}connecting with friends.
         </Text>
       </View>
 
-      {/* Features preview */}
-      <View style={styles.featuresContainer}>
-        <View style={styles.featureItem}>
-          <View style={styles.featureIcon}>
-            <Text style={styles.featureEmoji}>📹</Text>
-          </View>
-          <View style={styles.featureText}>
-            <Text style={styles.featureTitle}>Record daily vlogs</Text>
-            <Text style={styles.featureDesc}>1-2 minute life updates</Text>
-          </View>
+      {/* Summary */}
+      <View style={styles.summaryContainer}>
+        <Text style={styles.summaryTitle}>Your details</Text>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Name</Text>
+          <Text style={styles.summaryValue}>{data.name}</Text>
         </View>
-
-        <View style={styles.featureItem}>
-          <View style={styles.featureIcon}>
-            <Text style={styles.featureEmoji}>👥</Text>
-          </View>
-          <View style={styles.featureText}>
-            <Text style={styles.featureTitle}>Share with groups</Text>
-            <Text style={styles.featureDesc}>Keep close friends in the loop</Text>
-          </View>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Email</Text>
+          <Text style={styles.summaryValue}>{data.email}</Text>
         </View>
-
-        <View style={styles.featureItem}>
-          <View style={styles.featureIcon}>
-            <Text style={styles.featureEmoji}>✨</Text>
-          </View>
-          <View style={styles.featureText}>
-            <Text style={styles.featureTitle}>AI weekly recaps</Text>
-            <Text style={styles.featureDesc}>Never miss a moment</Text>
-          </View>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Password</Text>
+          <Text style={styles.summaryValue}>{'•'.repeat(data.password.length)}</Text>
         </View>
       </View>
 
-      {/* Scribble decoration */}
-      <Text style={styles.scribble}>{"~ let's go! ~"}</Text>
-
-      {/* Start button */}
+      {/* Create account button */}
       <TouchableOpacity
         style={styles.startButton}
-        onPress={() => router.replace('/(tabs)')}
+        onPress={handleCreateAccount}
         activeOpacity={0.8}
       >
-        <Text style={styles.startText}>Start Waffling</Text>
+        <Text style={styles.startText}>Create Account</Text>
       </TouchableOpacity>
     </View>
   );
@@ -80,13 +219,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingTop: 80,
   },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: WaffleColors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContent: {
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: WaffleColors.carbonBlack,
+    marginTop: 24,
+  },
+  loadingScribble: {
+    fontSize: 14,
+    color: WaffleColors.charcoal,
+    opacity: 0.5,
+    fontStyle: 'italic',
+    marginTop: 8,
+  },
   progressContainer: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 48,
+    marginBottom: 24,
   },
   progressDot: {
-    width: 40,
+    width: 32,
     height: 6,
     borderRadius: 3,
     backgroundColor: WaffleColors.dustGrey,
@@ -94,9 +255,19 @@ const styles = StyleSheet.create({
   progressDotActive: {
     backgroundColor: WaffleColors.yellow,
   },
+  backButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    marginBottom: 24,
+  },
+  backText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WaffleColors.carbonBlack,
+  },
   celebrationContainer: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: 32,
   },
   emojiContainer: {
     width: 100,
@@ -113,6 +284,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 1,
     shadowRadius: 0,
   },
+  emojiContainerError: {
+    backgroundColor: WaffleColors.dustGrey,
+  },
   celebrationEmoji: {
     fontSize: 48,
   },
@@ -128,6 +302,38 @@ const styles = StyleSheet.create({
     color: WaffleColors.charcoal,
     textAlign: 'center',
     lineHeight: 24,
+  },
+  summaryContainer: {
+    backgroundColor: WaffleColors.parchment,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: WaffleColors.carbonBlack,
+    padding: 20,
+    marginBottom: 24,
+  },
+  summaryTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: WaffleColors.charcoal,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 16,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: WaffleColors.dustGrey,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: WaffleColors.charcoal,
+  },
+  summaryValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: WaffleColors.carbonBlack,
   },
   featuresContainer: {
     backgroundColor: WaffleColors.parchment,
@@ -195,5 +401,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: WaffleColors.carbonBlack,
+  },
+  backLink: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  backLinkText: {
+    fontSize: 14,
+    color: WaffleColors.charcoal,
+    textDecorationLine: 'underline',
   },
 });
