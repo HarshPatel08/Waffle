@@ -4,16 +4,30 @@ import { useRouter } from 'expo-router';
 import { WaffleColors } from '@/constants/theme';
 import { useOnboarding } from '@/context/OnboardingContext';
 import { useAuth } from '@/context/AuthContext';
+import { WaffleBackground } from '@/components/waffle-background';
+
+const EMOJI_OPTIONS = ['😊', '😎', '🤓', '😴', '🤠', '🥳', '😇', '🤗', '🧇', '🎨', '🎮', '⚽️', '🎵', '📚', '🍕', '🌟'];
 
 export default function DoneScreen() {
   const router = useRouter();
-  const { data, resetData } = useOnboarding();
+  const { data, updateData, resetData } = useOnboarding();
   const { signUp } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isCreated, setIsCreated] = useState(false);
   const [error, setError] = useState('');
+  const [selectedEmoji, setSelectedEmoji] = useState(data.emoji || '😊');
+  const [serverError, setServerError] = useState(false);
 
   const handleCreateAccount = async () => {
+    // Validate all data is present
+    if (!data.name || !data.email || !data.password) {
+      setError('Please complete all onboarding steps first');
+      return;
+    }
+
+    // Update emoji in context before creating account
+    updateData({ emoji: selectedEmoji });
+
     setIsLoading(true);
     setError('');
 
@@ -22,7 +36,7 @@ export default function DoneScreen() {
         name: data.name,
         email: data.email,
         password: data.password,
-        emoji: data.emoji,
+        emoji: selectedEmoji,
       });
 
       if (result.success) {
@@ -32,7 +46,16 @@ export default function DoneScreen() {
         setError(result.message);
       }
     } catch (err) {
-      setError('Failed to create account. Please try again.');
+      console.error('Signup error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+
+      // Check if it's a network error (server not running)
+      if (errorMessage.includes('Network') || errorMessage.includes('fetch')) {
+        setServerError(true);
+        setError('Cannot connect to server. Make sure the server is running with "npm run server"');
+      } else {
+        setError(errorMessage || 'Failed to create account. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -45,26 +68,38 @@ export default function DoneScreen() {
   // Show loading/creating state
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <View style={styles.loadingContent}>
-          <ActivityIndicator size="large" color={WaffleColors.yellow} />
-          <Text style={styles.loadingText}>Creating your account...</Text>
-          <Text style={styles.loadingScribble}>{"~ almost there ~"}</Text>
+      <>
+        <WaffleBackground />
+        <View style={styles.loadingContainer}>
+          <View style={styles.loadingContent}>
+            <ActivityIndicator size="large" color={WaffleColors.yellow} />
+            <Text style={styles.loadingText}>Creating your account...</Text>
+            <Text style={styles.loadingScribble}>{"~ almost there ~"}</Text>
+          </View>
         </View>
-      </View>
+      </>
     );
   }
 
   // Show error state
   if (error) {
     return (
-      <View style={styles.container}>
+      <>
+        <WaffleBackground />
+        <View style={styles.container}>
         <View style={styles.celebrationContainer}>
           <View style={[styles.emojiContainer, styles.emojiContainerError]}>
-            <Text style={styles.celebrationEmoji}>😕</Text>
+            <Text style={styles.celebrationEmoji}>{serverError ? '🔌' : '😕'}</Text>
           </View>
-          <Text style={styles.title}>Oops!</Text>
+          <Text style={styles.title}>{serverError ? 'Server Not Running' : 'Oops!'}</Text>
           <Text style={styles.subtitle}>{error}</Text>
+          {serverError && (
+            <View style={styles.serverHelpBox}>
+              <Text style={styles.serverHelpTitle}>To start the server:</Text>
+              <Text style={styles.serverHelpCommand}>npm run server</Text>
+              <Text style={styles.serverHelpNote}>Run this in a new terminal window</Text>
+            </View>
+          )}
         </View>
 
         <TouchableOpacity
@@ -81,14 +116,17 @@ export default function DoneScreen() {
         >
           <Text style={styles.backLinkText}>← Go back</Text>
         </TouchableOpacity>
-      </View>
+        </View>
+      </>
     );
   }
 
   // Show success/ready state
   if (isCreated) {
     return (
-      <View style={styles.container}>
+      <>
+        <WaffleBackground />
+        <View style={styles.container}>
         {/* Progress indicator */}
         <View style={styles.progressContainer}>
           <View style={[styles.progressDot, styles.progressDotActive]} />
@@ -152,13 +190,16 @@ export default function DoneScreen() {
         >
           <Text style={styles.startText}>Start Waffling</Text>
         </TouchableOpacity>
-      </View>
+        </View>
+      </>
     );
   }
 
   // Initial state - prompt to create account
   return (
-    <View style={styles.container}>
+    <>
+      <WaffleBackground />
+      <View style={styles.container}>
       {/* Progress indicator */}
       <View style={styles.progressContainer}>
         <View style={[styles.progressDot, styles.progressDotActive]} />
@@ -181,6 +222,27 @@ export default function DoneScreen() {
         <Text style={styles.subtitle}>
           Create your account and start{'\n'}connecting with friends.
         </Text>
+      </View>
+
+      {/* Emoji picker */}
+      <View style={styles.emojiPickerContainer}>
+        <Text style={styles.emojiPickerTitle}>Pick your avatar</Text>
+        <Text style={styles.emojiPickerSubtitle}>Choose an emoji that represents you</Text>
+        <View style={styles.emojiGrid}>
+          {EMOJI_OPTIONS.map((emoji) => (
+            <TouchableOpacity
+              key={emoji}
+              style={[
+                styles.emojiOption,
+                selectedEmoji === emoji && styles.emojiOptionSelected,
+              ]}
+              onPress={() => setSelectedEmoji(emoji)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.emojiOptionText}>{emoji}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       {/* Summary */}
@@ -208,20 +270,21 @@ export default function DoneScreen() {
       >
         <Text style={styles.startText}>Create Account</Text>
       </TouchableOpacity>
-    </View>
+      </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: WaffleColors.white,
+    backgroundColor: 'transparent',
     paddingHorizontal: 32,
     paddingTop: 80,
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: WaffleColors.white,
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -335,6 +398,46 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: WaffleColors.carbonBlack,
   },
+  emojiPickerContainer: {
+    marginBottom: 24,
+  },
+  emojiPickerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: WaffleColors.carbonBlack,
+    marginBottom: 4,
+  },
+  emojiPickerSubtitle: {
+    fontSize: 14,
+    color: WaffleColors.charcoal,
+    marginBottom: 16,
+  },
+  emojiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  emojiOption: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: WaffleColors.parchment,
+    borderWidth: 2,
+    borderColor: WaffleColors.carbonBlack,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emojiOptionSelected: {
+    backgroundColor: WaffleColors.yellow,
+    borderWidth: 3,
+    shadowColor: WaffleColors.carbonBlack,
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+  },
+  emojiOptionText: {
+    fontSize: 32,
+  },
   featuresContainer: {
     backgroundColor: WaffleColors.parchment,
     borderRadius: 20,
@@ -410,5 +513,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: WaffleColors.charcoal,
     textDecorationLine: 'underline',
+  },
+  serverHelpBox: {
+    backgroundColor: WaffleColors.carbonBlack,
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 20,
+    alignSelf: 'stretch',
+  },
+  serverHelpTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: WaffleColors.yellow,
+    marginBottom: 8,
+  },
+  serverHelpCommand: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: WaffleColors.white,
+    fontFamily: 'monospace',
+    marginBottom: 8,
+  },
+  serverHelpNote: {
+    fontSize: 12,
+    color: WaffleColors.dustGrey,
   },
 });

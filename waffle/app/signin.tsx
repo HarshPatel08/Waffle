@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { WaffleColors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { WaffleBackground } from "../components/waffle-background";
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -55,14 +56,16 @@ export default function SignInScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      {/* Back button */}
-      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Text style={styles.backText}>← Back</Text>
-      </TouchableOpacity>
+    <>
+      <WaffleBackground />
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        {/* Back button */}
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
 
       {/* Header */}
       <View style={styles.header}>
@@ -147,14 +150,15 @@ export default function SignInScreen() {
       >
         <Text style={styles.createAccountText}>Don't have an account? Create one</Text>
       </TouchableOpacity>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: WaffleColors.white,
+    backgroundColor: 'transparent',
     paddingHorizontal: 32,
     paddingTop: 60,
   },

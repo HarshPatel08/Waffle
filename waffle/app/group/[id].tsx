@@ -2,6 +2,7 @@ import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-nati
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { WaffleColors } from '@/constants/theme';
 import { groups, vlogs, weeklyRecap } from '@/constants/mockData';
+import { WaffleBackground } from '@/components/waffle-background';
 
 export default function GroupFeedScreen() {
   const router = useRouter();
@@ -11,8 +12,10 @@ export default function GroupFeedScreen() {
   const groupVlogs = vlogs.filter((v) => v.groupId === id);
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
+    <>
+      <WaffleBackground />
+      <View style={styles.container}>
+        {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Text style={styles.backText}>← Back</Text>
@@ -143,14 +146,15 @@ export default function GroupFeedScreen() {
         <Text style={styles.recordFabIcon}>🎬</Text>
         <Text style={styles.recordFabText}>Record</Text>
       </TouchableOpacity>
-    </View>
+      </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: WaffleColors.white,
+    backgroundColor: 'transparent',
   },
   header: {
     flexDirection: 'row',

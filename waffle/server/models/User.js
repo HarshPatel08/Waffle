@@ -48,11 +48,13 @@ userSchema.pre('save', async function (next) {
   }
 
   try {
+    console.log('[USER] Hashing password...');
     const salt = await bcrypt.genSalt(10);
+    console.log('[USER] Salt generated');
     this.password = await bcrypt.hash(this.password, salt);
-    next();
+    console.log('[USER] Password hashed successfully');
   } catch (error) {
-    next(error);
+    console.error('[USER] Bcrypt error:', error);
   }
 });
 

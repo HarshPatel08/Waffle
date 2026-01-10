@@ -10,9 +10,11 @@ const router = express.Router();
 router.post('/signup', async (req, res) => {
   try {
     const { name, email, password, emoji } = req.body;
+    console.log('[SIGNUP] Request received:', { name, email, hasPassword: !!password });
 
     // Validate required fields
     if (!name || !email || !password) {
+      console.log('[SIGNUP] Missing required fields');
       return res.status(400).json({
         success: false,
         message: 'Please provide name, email, and password',
@@ -20,6 +22,7 @@ router.post('/signup', async (req, res) => {
     }
 
     // Check name for profanity
+    console.log('[SIGNUP] Checking profanity...');
     const profanityCheck = checkProfanity(name);
     if (!profanityCheck.isClean) {
       return res.status(400).json({
@@ -30,6 +33,7 @@ router.post('/signup', async (req, res) => {
 
     // Validate password length (8-16 characters)
     if (password.length < 8 || password.length > 16) {
+      console.log('[SIGNUP] Password length invalid:', password.length);
       return res.status(400).json({
         success: false,
         message: 'Password must be between 8 and 16 characters',
@@ -37,7 +41,9 @@ router.post('/signup', async (req, res) => {
     }
 
     // Check if user already exists
+    console.log('[SIGNUP] Checking for existing user...');
     const existingUser = await User.findOne({ email: email.toLowerCase() });
+    console.log('[SIGNUP] Existing user check done:', !!existingUser);
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -46,12 +52,14 @@ router.post('/signup', async (req, res) => {
     }
 
     // Create new user
+    console.log('[SIGNUP] Creating user...');
     const user = await User.create({
       name,
       email: email.toLowerCase(),
       password,
       emoji: emoji || '😊',
     });
+    console.log('[SIGNUP] User created:', user._id);
 
     // Return user without password
     res.status(201).json({
@@ -65,8 +73,8 @@ router.post('/signup', async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Signup error:', error.message);
-    console.error('Full error:', error);
+    console.error('[SIGNUP] Error:', error.message);
+    console.error('[SIGNUP] Full error:', error);
 
     // Handle mongoose validation errors
     if (error.name === 'ValidationError') {

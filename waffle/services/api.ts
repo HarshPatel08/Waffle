@@ -47,15 +47,27 @@ class ApiService {
     };
 
     try {
+      console.log(`[API] ${options.method || 'GET'} ${url}`);
       const response = await fetch(url, config);
-      const data = await response.json();
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error('[API] Failed to parse JSON response:', jsonError);
+        throw new Error('Server returned invalid response');
+      }
+
+      console.log('[API] Response:', { status: response.status, success: data.success });
 
       if (!response.ok) {
+        console.error('[API] Request failed:', data.message);
         throw new Error(data.message || 'Something went wrong');
       }
 
       return data;
     } catch (error) {
+      console.error('[API] Request error:', error);
       if (error instanceof Error) {
         throw error;
       }

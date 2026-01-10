@@ -1,21 +1,26 @@
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { WaffleColors } from '@/constants/theme';
-import { currentUser, groups } from '@/constants/mockData';
+import { groups } from '@/constants/mockData';
+import { useAuth } from '@/context/AuthContext';
+import { WaffleBackground } from '@/components/waffle-background';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { user, signOut } = useAuth();
 
   return (
-    <View style={styles.container}>
-      {/* Header with profile */}
+    <>
+      <WaffleBackground />
+      <View style={styles.container}>
+        {/* Header with profile */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.greeting}>Hey, {currentUser.name.split(' ')[0]}!</Text>
+          <Text style={styles.greeting}>Hey, {user.name.split(' ')[0]}!</Text>
           <Text style={styles.subGreeting}>Ready to share today?</Text>
         </View>
         <TouchableOpacity style={styles.avatarContainer}>
-          <Text style={styles.avatarEmoji}>{currentUser.emoji}</Text>
+          <Text style={styles.avatarEmoji}>{user.emoji}</Text>
         </TouchableOpacity>
       </View>
 
@@ -95,14 +100,15 @@ export default function HomeScreen() {
       <View style={styles.floatingScribble}>
         <Text style={styles.floatingScribbleText}>{"* * *"}</Text>
       </View>
-    </View>
+      </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: WaffleColors.white,
+    backgroundColor: 'transparent',
     paddingTop: 60,
   },
   header: {

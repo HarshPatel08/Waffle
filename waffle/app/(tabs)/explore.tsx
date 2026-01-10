@@ -2,20 +2,25 @@ import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-nati
 import { useRouter } from 'expo-router';
 import { WaffleColors } from '@/constants/theme';
 import { currentUser, groups } from '@/constants/mockData';
+import { useAuth } from '@/context/AuthContext';
+import { WaffleBackground } from '@/components/waffle-background';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { user, signOut } = useAuth();
 
   const totalVlogs = 47;
   const totalGroups = groups.length;
   const streak = 12;
 
   return (
-    <ScrollView
-      style={styles.container}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.content}
-    >
+    <>
+      <WaffleBackground />
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+      >
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Profile</Text>
@@ -29,9 +34,7 @@ export default function ProfileScreen() {
         <View style={styles.avatarLarge}>
           <Text style={styles.avatarEmoji}>{currentUser.emoji}</Text>
         </View>
-        <Text style={styles.userName}>{currentUser.name}</Text>
-        <Text style={styles.userHandle}>@{currentUser.name.toLowerCase().replace(' ', '')}</Text>
-
+        <Text style={styles.userName}>{user.name}</Text>
         {/* Edit profile button */}
         <TouchableOpacity style={styles.editButton}>
           <Text style={styles.editButtonText}>Edit Profile</Text>
@@ -114,14 +117,15 @@ export default function ProfileScreen() {
 
       {/* Spacer */}
       <View style={{ height: 100 }} />
-    </ScrollView>
+      </ScrollView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: WaffleColors.white,
+    backgroundColor: 'transparent',
   },
   content: {
     paddingTop: 60,

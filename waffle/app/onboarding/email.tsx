@@ -11,6 +11,7 @@ import {
 import { useRouter } from 'expo-router';
 import { WaffleColors } from '@/constants/theme';
 import { useOnboarding } from '@/context/OnboardingContext';
+import { WaffleBackground } from '@/components/waffle-background';
 
 function isValidEmail(email: string): boolean {
   return /^\S+@\S+\.\S+$/.test(email);
@@ -40,10 +41,12 @@ export default function EmailScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <>
+      <WaffleBackground />
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       {/* Progress indicator */}
       <View style={styles.progressContainer}>
         <View style={[styles.progressDot, styles.progressDotActive]} />
@@ -97,14 +100,15 @@ export default function EmailScreen() {
       >
         <Text style={styles.continueText}>Continue</Text>
       </TouchableOpacity>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: WaffleColors.white,
+    backgroundColor: 'transparent',
     paddingHorizontal: 32,
     paddingTop: 80,
   },

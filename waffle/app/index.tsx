@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from 'rea
 import { useRouter } from 'expo-router';
 import { WaffleColors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { WaffleBackground } from '@/components/waffle-background';
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -23,14 +24,19 @@ export default function WelcomeScreen() {
   // Show loading while checking auth state
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={WaffleColors.yellow} />
-      </View>
+      <>
+        <WaffleBackground />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={WaffleColors.yellow} />
+        </View>
+      </>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <>
+      <WaffleBackground />
+      <View style={styles.container}>
       {/* Decorative scribbles */}
       <View style={styles.scribbleTop}>
         <Text style={styles.scribbleText}>~ ~ ~</Text>
@@ -83,21 +89,22 @@ export default function WelcomeScreen() {
       <View style={styles.scribbleBottom}>
         <Text style={styles.scribbleText}>* * *</Text>
       </View>
-    </View>
+      </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: WaffleColors.white,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: WaffleColors.white,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
