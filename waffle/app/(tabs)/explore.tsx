@@ -77,7 +77,10 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.settingsList}>
-        <TouchableOpacity style={styles.settingItem}>
+        <TouchableOpacity 
+          style={styles.settingItem}
+          onPress={() => router.push('/notifications-test')}
+        >
           <View style={styles.settingIcon}>
             <Text style={styles.settingEmoji}>🔔</Text>
           </View>
