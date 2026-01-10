@@ -1,29 +1,41 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Waffle App Theme Colors
  */
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+// Waffle Brand Colors
+export const WaffleColors = {
+  parchment: '#f7f0ea',
+  carbonBlack: '#242424',
+  dustGrey: '#e4dfda',
+  yellow: '#ffb039',
+  charcoal: '#5a5a5a',
+  white: '#ffffff',
+};
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
+    text: WaffleColors.carbonBlack,
+    background: WaffleColors.white,
+    tint: WaffleColors.yellow,
+    icon: WaffleColors.charcoal,
+    tabIconDefault: WaffleColors.charcoal,
+    tabIconSelected: WaffleColors.yellow,
+    card: WaffleColors.parchment,
+    border: WaffleColors.carbonBlack,
+    subtitle: WaffleColors.charcoal,
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
+    text: WaffleColors.parchment,
+    background: WaffleColors.carbonBlack,
+    tint: WaffleColors.yellow,
+    icon: WaffleColors.dustGrey,
+    tabIconDefault: WaffleColors.dustGrey,
+    tabIconSelected: WaffleColors.yellow,
+    card: WaffleColors.charcoal,
+    border: WaffleColors.dustGrey,
+    subtitle: WaffleColors.dustGrey,
   },
 };
 

@@ -1,0 +1,135 @@
+export const currentUser = {
+  id: '1',
+  name: 'Sarah Chen',
+  avatar: null, // Will use emoji placeholder
+  emoji: '👩‍💻',
+};
+
+export const groups = [
+  {
+    id: '1',
+    name: 'College Roomies',
+    emoji: '🏠',
+    memberCount: 6,
+    lastActivity: '2 hours ago',
+    members: [
+      { id: '2', name: 'Mike', emoji: '🧔' },
+      { id: '3', name: 'Emma', emoji: '👩‍🦰' },
+      { id: '4', name: 'Jake', emoji: '😎' },
+    ],
+    unreadCount: 3,
+  },
+  {
+    id: '2',
+    name: 'Work Besties',
+    emoji: '💼',
+    memberCount: 4,
+    lastActivity: '5 hours ago',
+    members: [
+      { id: '5', name: 'Priya', emoji: '👩‍🎤' },
+      { id: '6', name: 'Tom', emoji: '🧑‍💼' },
+    ],
+    unreadCount: 0,
+  },
+  {
+    id: '3',
+    name: 'Family',
+    emoji: '❤️',
+    memberCount: 8,
+    lastActivity: 'Yesterday',
+    members: [
+      { id: '7', name: 'Mom', emoji: '👩‍🦳' },
+      { id: '8', name: 'Dad', emoji: '👨‍🦳' },
+      { id: '9', name: 'Sis', emoji: '👧' },
+    ],
+    unreadCount: 5,
+  },
+  {
+    id: '4',
+    name: 'High School Gang',
+    emoji: '🎓',
+    memberCount: 12,
+    lastActivity: '3 days ago',
+    members: [
+      { id: '10', name: 'Chris', emoji: '🏀' },
+      { id: '11', name: 'Ashley', emoji: '🎨' },
+    ],
+    unreadCount: 0,
+  },
+];
+
+export const vlogs = [
+  {
+    id: '1',
+    userId: '2',
+    userName: 'Mike',
+    userEmoji: '🧔',
+    groupId: '1',
+    timestamp: '2 hours ago',
+    duration: '1:24',
+    thumbnail: null,
+    prompt: "What's the best thing you ate this week?",
+    hasViewed: false,
+  },
+  {
+    id: '2',
+    userId: '3',
+    userName: 'Emma',
+    userEmoji: '👩‍🦰',
+    groupId: '1',
+    timestamp: '5 hours ago',
+    duration: '0:58',
+    thumbnail: null,
+    prompt: 'Share a highlight from your day',
+    hasViewed: true,
+  },
+  {
+    id: '3',
+    userId: '4',
+    userName: 'Jake',
+    userEmoji: '😎',
+    groupId: '1',
+    timestamp: 'Yesterday',
+    duration: '1:45',
+    thumbnail: null,
+    prompt: "What's something new you learned?",
+    hasViewed: true,
+  },
+  {
+    id: '4',
+    userId: '7',
+    userName: 'Mom',
+    userEmoji: '👩‍🦳',
+    groupId: '3',
+    timestamp: '1 day ago',
+    duration: '2:01',
+    thumbnail: null,
+    prompt: 'Weekend plans?',
+    hasViewed: false,
+  },
+  {
+    id: '5',
+    userId: '5',
+    userName: 'Priya',
+    userEmoji: '👩‍🎤',
+    groupId: '2',
+    timestamp: '5 hours ago',
+    duration: '1:12',
+    thumbnail: null,
+    prompt: 'Share a highlight from your day',
+    hasViewed: true,
+  },
+];
+
+export const weeklyRecap = {
+  id: '1',
+  groupId: '1',
+  groupName: 'College Roomies',
+  generatedAt: '2 days ago',
+  summary: "This week was all about good food and new experiences! Mike discovered an amazing ramen spot, Emma finally finished her painting project, and Jake's been learning guitar...",
+  highlights: [
+    'Mike found the best ramen in town',
+    "Emma completed her first oil painting",
+    'Jake learned 3 new guitar chords',
+  ],
+};
