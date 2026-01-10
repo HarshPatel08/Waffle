@@ -9,6 +9,12 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
 
+  // Redirect if no user (e.g., after sign out)
+  if (!user) {
+    router.replace('/');
+    return null;
+  }
+
   return (
     <>
       <WaffleBackground />

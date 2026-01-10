@@ -13,6 +13,12 @@ export default function ProfileScreen() {
   const totalGroups = groups.length;
   const streak = 12;
 
+  // Redirect if no user (e.g., after sign out)
+  if (!user) {
+    router.replace('/');
+    return null;
+  }
+
   return (
     <>
       <WaffleBackground />
@@ -32,7 +38,7 @@ export default function ProfileScreen() {
       {/* Profile card */}
       <View style={styles.profileCard}>
         <View style={styles.avatarLarge}>
-          <Text style={styles.avatarEmoji}>{currentUser.emoji}</Text>
+          <Text style={styles.avatarEmoji}>{user.emoji}</Text>
         </View>
         <Text style={styles.userName}>{user.name}</Text>
         {/* Edit profile button */}
@@ -107,7 +113,10 @@ export default function ProfileScreen() {
       {/* Sign out */}
       <TouchableOpacity
         style={styles.signOutButton}
-        onPress={() => router.replace('/')}
+        onPress={async () => {
+          await signOut();
+          router.replace('/');
+        }}
       >
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>

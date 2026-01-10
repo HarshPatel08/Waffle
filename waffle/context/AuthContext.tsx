@@ -54,7 +54,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const storedUser = await storage.getItem(USER_STORAGE_KEY);
       if (storedUser) {
-        setUser(JSON.parse(storedUser));
+        const user = JSON.parse(storedUser);
+
+        // Auto-clear debug users (optional - comment out if you want to keep debug login)
+        // if (user.id?.startsWith('debug-')) {
+        //   console.log('[AUTH] Debug user detected, clearing...');
+        //   await storage.removeItem(USER_STORAGE_KEY);
+        //   return;
+        // }
+
+        setUser(user);
       }
     } catch (error) {
       console.error('Error loading stored user:', error);

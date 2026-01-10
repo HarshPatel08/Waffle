@@ -7,11 +7,15 @@ import { WaffleBackground } from '@/components/waffle-background';
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const { isAuthenticated, isLoading, debugSkipAuth } = useAuth();
+  const { isAuthenticated, isLoading, debugSkipAuth, signOut, user } = useAuth();
 
   const handleDebugSkip = async () => {
     await debugSkipAuth();
     router.replace('/(tabs)');
+  };
+
+  const handleClearCache = async () => {
+    await signOut();
   };
 
   useEffect(() => {
@@ -77,13 +81,22 @@ export default function WelcomeScreen() {
         <Text style={styles.signInText}>Already have an account? Sign in</Text>
       </TouchableOpacity>
 
-      {/* Debug skip button */}
-      <TouchableOpacity
-        style={styles.debugButton}
-        onPress={handleDebugSkip}
-      >
-        <Text style={styles.debugText}>Skip to App (Debug)</Text>
-      </TouchableOpacity>
+      {/* Debug buttons */}
+      <View style={styles.debugContainer}>
+        <TouchableOpacity
+          style={styles.debugButton}
+          onPress={handleDebugSkip}
+        >
+          <Text style={styles.debugText}>Skip to App (Debug)</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.debugButton, styles.clearCacheButton]}
+          onPress={handleClearCache}
+        >
+          <Text style={styles.debugText}>Clear Cache</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Decorative scribbles bottom */}
       <View style={styles.scribbleBottom}>
@@ -200,12 +213,19 @@ const styles = StyleSheet.create({
     color: WaffleColors.charcoal,
     textDecorationLine: 'underline',
   },
-  debugButton: {
+  debugContainer: {
     marginTop: 20,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  debugButton: {
     paddingVertical: 8,
     paddingHorizontal: 16,
     backgroundColor: WaffleColors.dustGrey,
     borderRadius: 8,
+  },
+  clearCacheButton: {
+    backgroundColor: '#e53935',
   },
   debugText: {
     fontSize: 12,
