@@ -1,0 +1,31 @@
+name: Test GCS Upload
+
+on:
+  workflow_dispatch: # Allows you to run this manually for testing
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: 'google-github-actions/auth@v2'
+        with:
+          # This refers to the name of the secret you saved in GitHub
+          credentials_json: '${{ secrets.GCP_ACCESS }}'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install google-cloud-storage
+
+      - name: Run Upload Script
+        env:
+          GCP_BUCKET_NAME: "waffle-user-videos"
+        run: python upload_test.py
