@@ -14,13 +14,7 @@ export default function ProfileScreen() {
   const totalGroups = groups.length;
   const streak = 12;
 
-  // Redirect to welcome page when user signs out
-  useEffect(() => {
-    if (!user) {
-      router.push('/');
-    }
-  }, [user]);
-
+  // When user is null (signed out), render nothing - sign out button handles navigation
   if (!user) {
     return null;
   }
@@ -33,107 +27,108 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Profile</Text>
-        <TouchableOpacity style={styles.settingsButton}>
-          <Text style={styles.settingsEmoji}>⚙️</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Profile card */}
-      <View style={styles.profileCard}>
-        <View style={styles.avatarLarge}>
-          <Text style={styles.avatarEmoji}>{user.emoji}</Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Profile</Text>
+          <TouchableOpacity style={styles.settingsButton}>
+            <Text style={styles.settingsEmoji}>⚙️</Text>
+          </TouchableOpacity>
         </View>
-        <Text style={styles.userName}>{user.name}</Text>
-        {/* Edit profile button */}
-        <TouchableOpacity style={styles.editButton}>
-          <Text style={styles.editButtonText}>Edit Profile</Text>
-        </TouchableOpacity>
 
-        {/* Scribble decoration */}
-        <Text style={styles.profileScribble}>{"~you~"}</Text>
-      </View>
-
-      {/* Stats */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{totalVlogs}</Text>
-          <Text style={styles.statLabel}>Vlogs</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{totalGroups}</Text>
-          <Text style={styles.statLabel}>Groups</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <View style={styles.streakContainer}>
-            <Text style={styles.statNumber}>{streak}</Text>
-            <Text style={styles.streakFire}>🔥</Text>
+        {/* Profile card */}
+        <View style={styles.profileCard}>
+          <View style={styles.avatarLarge}>
+            <Text style={styles.avatarEmoji}>{user.emoji}</Text>
           </View>
-          <Text style={styles.statLabel}>Day Streak</Text>
+          <Text style={styles.userName}>{user.name}</Text>
+          {/* Edit profile button */}
+          <TouchableOpacity style={styles.editButton}>
+            <Text style={styles.editButtonText}>Edit Profile</Text>
+          </TouchableOpacity>
+
+          {/* Scribble decoration */}
+          <Text style={styles.profileScribble}>{"~you~"}</Text>
         </View>
-      </View>
 
-      {/* Settings section */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Settings</Text>
-      </View>
+        {/* Stats */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{totalVlogs}</Text>
+            <Text style={styles.statLabel}>Vlogs</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{totalGroups}</Text>
+            <Text style={styles.statLabel}>Groups</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <View style={styles.streakContainer}>
+              <Text style={styles.statNumber}>{streak}</Text>
+              <Text style={styles.streakFire}>🔥</Text>
+            </View>
+            <Text style={styles.statLabel}>Day Streak</Text>
+          </View>
+        </View>
 
-      <View style={styles.settingsList}>
-        <TouchableOpacity 
-          style={styles.settingItem}
-          onPress={() => router.push('/notifications-test')}
+        {/* Settings section */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Settings</Text>
+        </View>
+
+        <View style={styles.settingsList}>
+          <TouchableOpacity
+            style={styles.settingItem}
+            onPress={() => router.push('/notifications-test')}
+          >
+            <View style={styles.settingIcon}>
+              <Text style={styles.settingEmoji}>🔔</Text>
+            </View>
+            <Text style={styles.settingText}>Notifications</Text>
+            <Text style={styles.settingArrow}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingItem}>
+            <View style={styles.settingIcon}>
+              <Text style={styles.settingEmoji}>🎙️</Text>
+            </View>
+            <Text style={styles.settingText}>Recording Settings</Text>
+            <Text style={styles.settingArrow}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingItem}>
+            <View style={styles.settingIcon}>
+              <Text style={styles.settingEmoji}>🔒</Text>
+            </View>
+            <Text style={styles.settingText}>Privacy</Text>
+            <Text style={styles.settingArrow}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingItem}>
+            <View style={styles.settingIcon}>
+              <Text style={styles.settingEmoji}>❓</Text>
+            </View>
+            <Text style={styles.settingText}>Help & Support</Text>
+            <Text style={styles.settingArrow}>→</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Sign out */}
+        <TouchableOpacity
+          style={styles.signOutButton}
+          onPress={async () => {
+            await signOut();
+            router.replace('/signin');
+          }}
         >
-          <View style={styles.settingIcon}>
-            <Text style={styles.settingEmoji}>🔔</Text>
-          </View>
-          <Text style={styles.settingText}>Notifications</Text>
-          <Text style={styles.settingArrow}>→</Text>
+          <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.settingItem}>
-          <View style={styles.settingIcon}>
-            <Text style={styles.settingEmoji}>🎙️</Text>
-          </View>
-          <Text style={styles.settingText}>Recording Settings</Text>
-          <Text style={styles.settingArrow}>→</Text>
-        </TouchableOpacity>
+        {/* Version */}
+        <Text style={styles.version}>Waffle v1.0.0</Text>
 
-        <TouchableOpacity style={styles.settingItem}>
-          <View style={styles.settingIcon}>
-            <Text style={styles.settingEmoji}>🔒</Text>
-          </View>
-          <Text style={styles.settingText}>Privacy</Text>
-          <Text style={styles.settingArrow}>→</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.settingItem}>
-          <View style={styles.settingIcon}>
-            <Text style={styles.settingEmoji}>❓</Text>
-          </View>
-          <Text style={styles.settingText}>Help & Support</Text>
-          <Text style={styles.settingArrow}>→</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Sign out */}
-      <TouchableOpacity
-        style={styles.signOutButton}
-        onPress={async () => {
-          await signOut();
-        }}
-      >
-        <Text style={styles.signOutText}>Sign Out</Text>
-      </TouchableOpacity>
-
-      {/* Version */}
-      <Text style={styles.version}>Waffle v1.0.0</Text>
-
-      {/* Spacer */}
-      <View style={{ height: 100 }} />
+        {/* Spacer */}
+        <View style={{ height: 100 }} />
       </ScrollView>
     </>
   );

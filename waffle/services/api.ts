@@ -66,7 +66,8 @@ class ApiService {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = API_URL;
+    // Strip trailing slash to prevent double-slash in URLs
+    this.baseUrl = API_URL.endsWith('/') ? API_URL.slice(0, -1) : API_URL;
   }
 
   private async request<T>(
@@ -129,6 +130,33 @@ class ApiService {
   async healthCheck(): Promise<{ status: string; message: string }> {
     const response = await fetch(`${this.baseUrl}/api/health`);
     return response.json();
+  }
+
+  async createInvitation(
+    senderId: string,
+    groupName: string,
+    invitedUserIds: string[],
+    groupId?: string
+  ): Promise<ApiResponse<any>> {
+    return this.request<any>('/api/invitations/create', {
+      method: 'POST',
+      body: JSON.stringify({ senderId, groupName, invitedUserIds, groupId }),
+    });
+  }
+
+  async getPendingInvitations(userId: string): Promise<ApiResponse<any[]>> {
+    return this.request<any[]>(`/api/invitations/pending/${userId}`);
+  }
+
+  async respondToInvitation(
+    invitationId: string,
+    userId: string,
+    response: 'accepted' | 'declined'
+  ): Promise<ApiResponse<any>> {
+    return this.request<any>('/api/invitations/respond', {
+      method: 'POST',
+      body: JSON.stringify({ invitationId, userId, response }),
+    });
   }
 
   async getGroups(userId: string): Promise<{ success: boolean; groups: Group[] }> {

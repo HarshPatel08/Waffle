@@ -36,27 +36,30 @@ export default function NewGroupScreen() {
   const [error, setError] = useState('');
 
   const handleCreateGroup = async () => {
-    if (!currentUser) return;
+    console.log('[NewGroup] handleCreateGroup called', { currentUser, groupName, selectedUserIds });
+    if (!currentUser) {
+      console.log('[NewGroup] No currentUser, returning');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      // Send invitations instead of creating group directly
+      console.log('[NewGroup] Calling createInvitation...');
       const res = await api.createInvitation(
         currentUser.id,
         groupName,
         selectedUserIds
       );
+      console.log('[NewGroup] Response:', res);
 
       if (res.success) {
-        Alert.alert(
-          'Invitations Sent',
-          'The group will be created once at least one person accepts.',
-          [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
-        );
+        // Navigate directly instead of relying on Alert callback (doesn't work on web)
+        router.replace('/(tabs)');
       } else {
         setError(res.message || 'Failed to send invitations');
       }
     } catch (err) {
+      console.error('[NewGroup] Error:', err);
       setError('Network error');
     }
     setLoading(false);

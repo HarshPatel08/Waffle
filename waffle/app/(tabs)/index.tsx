@@ -6,7 +6,7 @@ import { WaffleColors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/services/api';
 import { WaffleBackground } from '@/components/waffle-background';
-import { api, Group } from '@/services/api';
+import { Group } from '@/services/api';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -17,7 +17,7 @@ export default function HomeScreen() {
   const fetchGroups = async () => {
     if (!user) return;
     try {
-      const res = await api.getUserGroups(user.id);
+      const res = await api.getGroups(user.id);
       if (res.success && res.groups) {
         setGroups(res.groups);
       }
@@ -38,9 +38,8 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  // Redirect if no user (e.g., after sign out)
+  // When user is null, render nothing - navigation is handled by sign out button
   if (!user) {
-    router.replace('/');
     return null;
   }
 
@@ -49,15 +48,6 @@ export default function HomeScreen() {
       <WaffleBackground />
       <View style={styles.container}>
         {/* Header with profile */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.greeting}>Hey, {user.name.split(' ')[0]}!</Text>
-          <Text style={styles.subGreeting}>Ready to share today?</Text>
-        </View>
-        <TouchableOpacity style={styles.avatarContainer}>
-          <Text style={styles.avatarEmoji}>{user.emoji}</Text>
-        </TouchableOpacity>
-      </View>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.greeting}>Hey, {user.name.split(' ')[0]}!</Text>
@@ -118,10 +108,10 @@ export default function HomeScreen() {
           ) : (
             groups.map((group) => (
               <TouchableOpacity
-                key={group._id}
+                key={group.id}
                 style={styles.groupCard}
                 activeOpacity={0.8}
-                onPress={() => router.push(`/group/${group._id}`)}
+                onPress={() => router.push(`/group/${group.id}`)}
               >
                 <View style={styles.groupEmoji}>
                   <Text style={styles.groupEmojiText}>🏠</Text>
@@ -142,7 +132,7 @@ export default function HomeScreen() {
                   <View style={styles.memberAvatars}>
                     {group.members.slice(0, 3).map((member: any, index: number) => (
                       <View
-                        key={member._id}
+                        key={member.id}
                         style={[styles.memberAvatar, { marginLeft: index > 0 ? -8 : 0 }]}
                       >
                         <Text style={styles.memberAvatarEmoji}>{member.emoji}</Text>

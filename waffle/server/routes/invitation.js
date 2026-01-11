@@ -84,7 +84,8 @@ router.post('/respond', async (req, res) => {
                 // Create group with Sender AND Acceptor
                 group = await Group.create({
                     name: invitation.groupName,
-                    members: [invitation.sender, userId]
+                    members: [invitation.sender, userId],
+                    createdBy: invitation.sender
                 });
 
                 // Update invitation
