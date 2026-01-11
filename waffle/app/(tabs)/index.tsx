@@ -1,13 +1,56 @@
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useState, useEffect } from 'react';
 import { WaffleColors } from '@/constants/theme';
-import { groups } from '@/constants/mockData';
 import { useAuth } from '@/context/AuthContext';
 import { WaffleBackground } from '@/components/waffle-background';
+import { api, Group } from '@/services/api';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch groups when component mounts or user changes
+  useEffect(() => {
+    if (user?.id) {
+      fetchGroups();
+    }
+  }, [user?.id]);
+
+  const fetchGroups = async () => {
+    if (!user?.id) return;
+
+    try {
+      setIsLoading(true);
+      const response = await api.getGroups(user.id);
+      if (response.success) {
+        setGroups(response.groups);
+      }
+    } catch (error) {
+      console.error('Error fetching groups:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const createDefaultGroup = async () => {
+    if (!user?.id) return;
+
+    try {
+      const response = await api.createGroup({
+        name: 'My First Group',
+        emoji: '🏠',
+        createdBy: user.id,
+      });
+      if (response.success) {
+        fetchGroups();
+      }
+    } catch (error) {
+      console.error('Error creating group:', error);
+    }
+  };
 
   // Redirect if no user (e.g., after sign out)
   if (!user) {
@@ -33,7 +76,7 @@ export default function HomeScreen() {
       {/* Groups section */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Your Groups</Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={createDefaultGroup}>
           <Text style={styles.sectionAction}>+ New</Text>
         </TouchableOpacity>
       </View>
@@ -43,47 +86,57 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.groupsListContent}
       >
-        {groups.map((group) => (
-          <TouchableOpacity
-            key={group.id}
-            style={styles.groupCard}
-            activeOpacity={0.8}
-            onPress={() => router.push(`/group/${group.id}`)}
-          >
-            <View style={styles.groupEmoji}>
-              <Text style={styles.groupEmojiText}>{group.emoji}</Text>
-            </View>
-            <View style={styles.groupInfo}>
-              <View style={styles.groupNameRow}>
-                <Text style={styles.groupName}>{group.name}</Text>
-                {group.unreadCount > 0 && (
-                  <View style={styles.unreadBadge}>
-                    <Text style={styles.unreadText}>{group.unreadCount}</Text>
-                  </View>
-                )}
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={WaffleColors.yellow} />
+          </View>
+        ) : groups.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyEmoji}>👥</Text>
+            <Text style={styles.emptyTitle}>No groups yet</Text>
+            <Text style={styles.emptySubtitle}>Create your first group to get started!</Text>
+            <TouchableOpacity style={styles.createButton} onPress={createDefaultGroup}>
+              <Text style={styles.createButtonText}>Create Group</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          groups.map((group) => (
+            <TouchableOpacity
+              key={group.id}
+              style={styles.groupCard}
+              activeOpacity={0.8}
+              onPress={() => router.push(`/group/${group.id}`)}
+            >
+              <View style={styles.groupEmoji}>
+                <Text style={styles.groupEmojiText}>{group.emoji}</Text>
               </View>
-              <Text style={styles.groupMeta}>
-                {group.memberCount} members · {group.lastActivity}
-              </Text>
-              <View style={styles.memberAvatars}>
-                {group.members.slice(0, 3).map((member, index) => (
-                  <View
-                    key={member.id}
-                    style={[styles.memberAvatar, { marginLeft: index > 0 ? -8 : 0 }]}
-                  >
-                    <Text style={styles.memberAvatarEmoji}>{member.emoji}</Text>
-                  </View>
-                ))}
-                {group.memberCount > 3 && (
-                  <View style={[styles.memberAvatar, styles.memberAvatarMore, { marginLeft: -8 }]}>
-                    <Text style={styles.memberMoreText}>+{group.memberCount - 3}</Text>
-                  </View>
-                )}
+              <View style={styles.groupInfo}>
+                <View style={styles.groupNameRow}>
+                  <Text style={styles.groupName}>{group.name}</Text>
+                </View>
+                <Text style={styles.groupMeta}>
+                  {group.memberCount} {group.memberCount === 1 ? 'member' : 'members'}
+                </Text>
+                <View style={styles.memberAvatars}>
+                  {group.members.slice(0, 3).map((member, index) => (
+                    <View
+                      key={member.id}
+                      style={[styles.memberAvatar, { marginLeft: index > 0 ? -8 : 0 }]}
+                    >
+                      <Text style={styles.memberAvatarEmoji}>{member.emoji}</Text>
+                    </View>
+                  ))}
+                  {group.memberCount > 3 && (
+                    <View style={[styles.memberAvatar, styles.memberAvatarMore, { marginLeft: -8 }]}>
+                      <Text style={styles.memberMoreText}>+{group.memberCount - 3}</Text>
+                    </View>
+                  )}
+                </View>
               </View>
-            </View>
-            <Text style={styles.groupArrow}>→</Text>
-          </TouchableOpacity>
-        ))}
+              <Text style={styles.groupArrow}>→</Text>
+            </TouchableOpacity>
+          ))
+        )}
       </ScrollView>
 
       {/* Floating scribble decoration */}
@@ -312,5 +365,41 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: WaffleColors.charcoal,
     opacity: 0.2,
+  },
+  loadingContainer: {
+    paddingVertical: 48,
+    alignItems: 'center',
+  },
+  emptyState: {
+    paddingVertical: 48,
+    alignItems: 'center',
+  },
+  emptyEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: WaffleColors.carbonBlack,
+    marginBottom: 4,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: WaffleColors.charcoal,
+    marginBottom: 16,
+  },
+  createButton: {
+    backgroundColor: WaffleColors.yellow,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 100,
+    borderWidth: 2,
+    borderColor: WaffleColors.carbonBlack,
+  },
+  createButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: WaffleColors.carbonBlack,
   },
 });

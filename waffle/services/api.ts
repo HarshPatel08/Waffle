@@ -4,6 +4,8 @@ interface ApiResponse<T> {
   success: boolean;
   message: string;
   user?: T;
+  groups?: T;
+  group?: T;
 }
 
 interface User {
@@ -23,6 +25,30 @@ interface SignUpData {
 interface SignInData {
   email: string;
   password: string;
+}
+
+interface GroupMember {
+  id: string;
+  name: string;
+  emoji: string;
+}
+
+interface Group {
+  id: string;
+  name: string;
+  emoji: string;
+  description?: string;
+  memberCount: number;
+  members: GroupMember[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface CreateGroupData {
+  name: string;
+  emoji?: string;
+  description?: string;
+  createdBy: string;
 }
 
 class ApiService {
@@ -93,7 +119,26 @@ class ApiService {
     const response = await fetch(`${this.baseUrl}/api/health`);
     return response.json();
   }
+
+  async getGroups(userId: string): Promise<{ success: boolean; groups: Group[] }> {
+    const response = await fetch(`${this.baseUrl}/api/groups/user/${userId}`);
+    return response.json();
+  }
+
+  async getGroup(groupId: string): Promise<{ success: boolean; group: Group }> {
+    const response = await fetch(`${this.baseUrl}/api/groups/${groupId}`);
+    return response.json();
+  }
+
+  async createGroup(data: CreateGroupData): Promise<{ success: boolean; message: string; group: Group }> {
+    const response = await fetch(`${this.baseUrl}/api/groups`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return response.json();
+  }
 }
 
 export const api = new ApiService();
-export type { User, SignUpData, SignInData, ApiResponse };
+export type { User, SignUpData, SignInData, ApiResponse, Group, GroupMember, CreateGroupData };

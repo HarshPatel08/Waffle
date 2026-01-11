@@ -1,21 +1,51 @@
-import React from "react";
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert } from "react-native";
+import React, { useState, useEffect } from "react";
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { WaffleColors } from "@/constants/theme";
-import { groups, vlogs, weeklyRecap } from "@/constants/mockData";
+import { vlogs, weeklyRecap } from "@/constants/mockData";
 import { WaffleBackground } from "@/components/waffle-background";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import { Platform } from "react-native";
+import { useAuth } from '@/context/AuthContext';
+import { api, Group } from '@/services/api';
 
 const API_BASE = "http://localhost:3001"; // TODO: replace with your Mac IP + backend port
-const userId = "USER_ID"; // TODO: replace with real user id
 
 export default function GroupFeedScreen() {
+  const { user, signOut } = useAuth();
   const router = useRouter();
   const { id } = useLocalSearchParams();
+  const [group, setGroup] = useState<Group | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const group = groups.find((g) => g.id === id) || groups[0];
+  // Fetch group data when component mounts
+  useEffect(() => {
+    if (id) {
+      fetchGroup();
+    }
+  }, [id]);
+
+  const fetchGroup = async () => {
+    try {
+      setIsLoading(true);
+      const response = await api.getGroup(String(id));
+      if (response.success) {
+        setGroup(response.group);
+      }
+    } catch (error) {
+      console.error('Error fetching group:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Redirect if no user (e.g., after sign out)
+  if (!user) {
+    router.replace('/');
+    return null;
+  }
+
   const groupVlogs = vlogs.filter((v) => v.groupId === id);
 
   // ✅ IMPORTANT: inside component so it can access `id`
@@ -58,7 +88,7 @@ export default function GroupFeedScreen() {
       const signedRes = await fetch(`${API_BASE}/api/vlogs/upload-url`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, groupId, contentType }),
+        body: JSON.stringify({ userId: user.id, groupId, contentType }),
       });
 
       const signedText = await signedRes.text();
@@ -125,7 +155,7 @@ export default function GroupFeedScreen() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId,
+          userId: user.id,
           groupId,
           gcsPath,
           publicUrl,
@@ -156,6 +186,46 @@ export default function GroupFeedScreen() {
     }
   }
 
+  // Show loading state
+  if (isLoading) {
+    return (
+      <>
+        <WaffleBackground />
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <Text style={styles.backText}>← Back</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={WaffleColors.yellow} />
+          </View>
+        </View>
+      </>
+    );
+  }
+
+  // Show error state if group not found
+  if (!group) {
+    return (
+      <>
+        <WaffleBackground />
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <Text style={styles.backText}>← Back</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorEmoji}>😕</Text>
+            <Text style={styles.errorTitle}>Group not found</Text>
+            <Text style={styles.errorSubtitle}>This group may have been deleted</Text>
+          </View>
+        </View>
+      </>
+    );
+  }
+
   return (
     <>
       <WaffleBackground />
@@ -176,7 +246,7 @@ export default function GroupFeedScreen() {
             <Text style={styles.groupEmojiText}>{group.emoji}</Text>
           </View>
           <Text style={styles.groupName}>{group.name}</Text>
-          <Text style={styles.groupMeta}>{group.memberCount} members</Text>
+          <Text style={styles.groupMeta}>{group.memberCount} {group.memberCount === 1 ? 'member' : 'members'}</Text>
 
           {/* Member row */}
           <View style={styles.membersRow}>
@@ -659,5 +729,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: WaffleColors.carbonBlack,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  errorEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: WaffleColors.carbonBlack,
+    marginBottom: 8,
+  },
+  errorSubtitle: {
+    fontSize: 14,
+    color: WaffleColors.charcoal,
+    textAlign: 'center',
   },
 });
