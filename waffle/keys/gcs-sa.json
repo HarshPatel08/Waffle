@@ -1,13 +1,1 @@
-{
-  "type": "service_account",
-  "project_id": "waffle-483919",
-  "private_key_id": "ab925e6961c8240f0a0de7717513bca5c8139989",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDcDZfTz4/SyTCt\nFTGVg27PlKxlUMiQPJ4pCAeD3M1PqQE9YbYJG+YGHRoEybtuE4Z7ME3cbvxxJpae\nYChcxSMogxoWrnEPSwgwUhK0HtH3pcJVl8D37leFroOS8z6x0MA2cgq2J2NBJRb4\nJyhe1FQSbOWj7we0CSigXATrY7+NdTm2BcxQ/+WEfKIInWR6Q1/DqEJYcELmcGBm\nFRjhIet6Ir0GFG6r5PnLUnN9qIhUvpvVV/+pJ3c9uB2+WOeBVQ/o9o7GcMEiBoUY\nhq/8KlYaSkt5735+7zg11SCRsU4jZtEpOuLgQTGaZBowtIH+SOHLIRtNgdtiij6r\nV3e5Sya5AgMBAAECggEAXoK6EF9HysTdUqFVI/2ItMAKkRMyqPxYA5BuxdwqFAom\nvam/SMdCMqMCH0dTaFIbgsI61q+WXbSwoQH0o++Ji6dPJ6mxZluX/0TowpKwJHh9\ncEyWtQWZcpGC8jTl2vIo89lkL1rYXsziwh7zUFNKboV11cReXx1F5SXQeRbk2QhR\nmN01ZYx9/d1mQZe+n0TV4VPLlNzASQFMexLpct9Dd+lhzkwBoXByane3ufnjI/ZM\nhFrEX2q9+KP5tFxbd4PHQj/127amE0FvdhGu0VwpOS8Uw8Xbm5mLUgGzNoAFIOWH\nKbRIdrlG0OjTFNM09WJ7Ja2fCNl0Y8TWWqHDXRMxvwKBgQDzZn92bLwKYpb6IiJX\np11G/NVDmr41fQO1KBxQHErOooom8IFRPdICGsWABGumUF5PoI4oUdUo2fhrRpbv\nMCm0uKnex+33r7APPDr/TMMsKWhFwvIhbm1IJgCAanXNsg/n55K6Mzv+pXFucIAV\n4Z1bxVAK6oQ+LZCQ4Q0JDpYrowKBgQDncbNmCrzZqQtgRMJFSigccMCpFoEwPj2s\n6q09zfzk/2NGNfj6oO/W8a7OJEDsrYB1JU09BDFR4hd8zffXRrsNylkHQQpUr8PQ\n6PWFaTjWhNrbIQkhAaLNlRpp5mty+U/jql89FuNJxjwpppmRtazCmSEt8OPfix7d\n8r53NV0J8wKBgF06Lywe7c9Uf9uC44CLXFDqWo0wYhZ+scLbgCy3CXgoDZ5olD+X\n3C5uLqOgDdOACP+a0Zhj769b/aipOvqWigLskDQChAVQx7CuMzLCJiduHMBLsQ5Z\nC4aM97g4DrMgtrLuoear5RjeKZpRgN3gsrMJ2mSz+r8OGMdFTAbiDWbdAoGAOm3A\n7ZTuYkDD53TUWqvC/pMUgFt3F9fOuDWysLStEJ7M0C/WAGfaxLfU+qO6ZEXU9T4K\nhsnlLZfXeCGDXSy1EmEwIp2v3vtUgwwc16ZdvAJkQgfQBy4jjKUEuxF5tNft7DrZ\nulFp5fkOvTEa+ecUizgfYTq8PHYhv8SFgxDMwTMCgYAgJRRzI0QiKsFl7ZuIwGOS\nRMsAC7coeq1MQYqljVtHiOD7vVQ2KFWv3mUbpPgvYx188Tw/OjLtsRY1H4Zz6tSG\nBsschYKosq/csSxXpb43lA1gvf47pOKhhV0cT5XKP0C9t+EruwsvsyvrO3Odws9h\nD66VhvQHjrXOCkiXLJlQ7g==\n-----END PRIVATE KEY-----\n",
-  "client_email": "waffle-app-access@waffle-483919.iam.gserviceaccount.com",
-  "client_id": "108802178151139349600",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/waffle-app-access%40waffle-483919.iam.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
-}
+
