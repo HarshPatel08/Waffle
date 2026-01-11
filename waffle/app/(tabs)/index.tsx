@@ -1,10 +1,12 @@
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useCallback } from 'react';
 import { WaffleColors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/services/api';
 import { WaffleBackground } from '@/components/waffle-background';
+import { api, Group } from '@/services/api';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -47,6 +49,15 @@ export default function HomeScreen() {
       <WaffleBackground />
       <View style={styles.container}>
         {/* Header with profile */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <Text style={styles.greeting}>Hey, {user.name.split(' ')[0]}!</Text>
+          <Text style={styles.subGreeting}>Ready to share today?</Text>
+        </View>
+        <TouchableOpacity style={styles.avatarContainer}>
+          <Text style={styles.avatarEmoji}>{user.emoji}</Text>
+        </TouchableOpacity>
+      </View>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.greeting}>Hey, {user.name.split(' ')[0]}!</Text>
@@ -375,5 +386,41 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: WaffleColors.charcoal,
     opacity: 0.2,
+  },
+  loadingContainer: {
+    paddingVertical: 48,
+    alignItems: 'center',
+  },
+  emptyState: {
+    paddingVertical: 48,
+    alignItems: 'center',
+  },
+  emptyEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: WaffleColors.carbonBlack,
+    marginBottom: 4,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: WaffleColors.charcoal,
+    marginBottom: 16,
+  },
+  createButton: {
+    backgroundColor: WaffleColors.yellow,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 100,
+    borderWidth: 2,
+    borderColor: WaffleColors.carbonBlack,
+  },
+  createButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: WaffleColors.carbonBlack,
   },
 });

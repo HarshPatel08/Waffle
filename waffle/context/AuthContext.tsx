@@ -107,7 +107,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    console.log('Signing out');
     setUser(null);
     if (Platform.OS === 'web') {
       localStorage.removeItem(USER_STORAGE_KEY);

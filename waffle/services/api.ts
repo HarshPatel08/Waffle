@@ -26,6 +26,42 @@ interface SignInData {
   password: string;
 }
 
+interface GroupMember {
+  id: string;
+  name: string;
+  emoji: string;
+}
+
+interface Group {
+  id: string;
+  name: string;
+  emoji: string;
+  description?: string;
+  memberCount: number;
+  members: GroupMember[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface CreateGroupData {
+  name: string;
+  emoji?: string;
+  description?: string;
+  createdBy: string;
+}
+
+interface Vlog {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmoji: string;
+  publicUrl: string;
+  duration: number;
+  prompt: string;
+  createdAt: string;
+  hasViewed?: boolean;
+}
+
 class ApiService {
   private baseUrl: string;
 
@@ -94,37 +130,36 @@ class ApiService {
     const response = await fetch(`${this.baseUrl}/api/health`);
     return response.json();
   }
-  async getPendingInvitations(userId: string): Promise<ApiResponse<any[]>> {
-    return this.request<any[]>(`/api/invitations/pending/${userId}`);
+
+  async getGroups(userId: string): Promise<{ success: boolean; groups: Group[] }> {
+    const response = await fetch(`${this.baseUrl}/api/groups/user/${userId}`);
+    return response.json();
   }
 
-  async respondToInvitation(invitationId: string, userId: string, response: 'accepted' | 'declined'): Promise<ApiResponse<any>> {
-    return this.request<any>('/api/invitations/respond', {
+  async getGroup(groupId: string): Promise<{ success: boolean; group: Group }> {
+    const response = await fetch(`${this.baseUrl}/api/groups/${groupId}`);
+    return response.json();
+  }
+
+  async createGroup(data: CreateGroupData): Promise<{ success: boolean; message: string; group: Group }> {
+    const response = await fetch(`${this.baseUrl}/api/groups`, {
       method: 'POST',
-      body: JSON.stringify({ invitationId, userId, response }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     });
+    return response.json();
   }
 
-  async createInvitation(senderId: string, groupName: string, invitedUserIds: string[], groupId?: string): Promise<ApiResponse<any>> {
-    return this.request<any>('/api/invitations/create', {
-      method: 'POST',
-      body: JSON.stringify({ senderId, groupName, invitedUserIds, groupId }),
-    });
+  async getVlogs(groupId: string): Promise<{ success: boolean; vlogs: Vlog[] }> {
+    const response = await fetch(`${this.baseUrl}/api/vlogs/group/${groupId}`);
+    return response.json();
   }
 
-  async getUsers(): Promise<ApiResponse<User[]>> {
-    return this.request<User[]>('/api/users');
-  }
-
-  async getUserGroups(userId: string): Promise<ApiResponse<any[]>> {
-    return this.request<any[]>(`/api/groups/user/${userId}`);
-  }
-
-  async getGroup(groupId: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/groups/${groupId}`);
+  async getWatchUrl(vlogId: string): Promise<{ success: boolean; watchUrl: string; expiresIn: number }> {
+    const response = await fetch(`${this.baseUrl}/api/vlogs/watch/${vlogId}`);
+    return response.json();
   }
 }
 
-
 export const api = new ApiService();
-export type { User, SignUpData, SignInData, ApiResponse };
+export type { User, SignUpData, SignInData, ApiResponse, Group, GroupMember, CreateGroupData, Vlog };

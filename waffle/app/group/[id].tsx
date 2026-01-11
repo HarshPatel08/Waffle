@@ -1,121 +1,301 @@
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, RefreshControl, ActivityIndicator, Modal, TouchableWithoutFeedback, Alert } from 'react-native';
-import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { WaffleColors } from '@/constants/theme';
-import { vlogs, weeklyRecap } from '@/constants/mockData';
-import { WaffleBackground } from '@/components/waffle-background';
-import { api } from '@/services/api';
+import React, { useState, useEffect } from "react";
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Modal } from "react-native";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { WaffleColors } from "@/constants/theme";
+import { WaffleBackground } from "@/components/waffle-background";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
+import { Platform } from "react-native";
 import { useAuth } from '@/context/AuthContext';
+import { api, Group, Vlog } from '@/services/api';
+import { useVideoPlayer, VideoView } from 'expo-video';
+
+const API_BASE = "http://localhost:3001"; // TODO: replace with your Mac IP + backend port
 
 export default function GroupFeedScreen() {
+  const { user, signOut } = useAuth();
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const { user: currentUser } = useAuth();
+  const [group, setGroup] = useState<Group | null>(null);
+  const [vlogs, setVlogs] = useState<Vlog[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedVlog, setSelectedVlog] = useState<Vlog | null>(null);
+  const [watchUrl, setWatchUrl] = useState<string | null>(null);
+  const [isLoadingVideo, setIsLoadingVideo] = useState(false);
 
-  const [group, setGroup] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [membersModalVisible, setMembersModalVisible] = useState(false);
-
-  const [addMemberModalVisible, setAddMemberModalVisible] = useState(false);
-  const [allUsers, setAllUsers] = useState<any[]>([]);
-  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
-
-  // Filter vlogs for this group (still mock for now)
-  const groupVlogs = vlogs.filter((v) => v.groupId === id);
-
-  const fetchGroup = async () => {
-    try {
-      const res = await api.getGroup(id as string);
-      if (res.success && res.group) {
-        setGroup(res.group);
-      }
-    } catch (error) {
-      console.error('Failed to fetch group', error);
-    } finally {
-      setLoading(false);
+  // Video player for the selected vlog
+  const player = useVideoPlayer(watchUrl, (player) => {
+    if (watchUrl) {
+      player.play();
     }
-  };
+  });
 
-  const fetchPotentialMembers = async () => {
-    try {
-      const res = await api.getUsers();
-      if (res.success && res.users) {
-        // Filter out existing members
-        const groupMemberIds = group?.members?.map((m: any) => m._id) || [];
-        const potential = res.users.filter((u: any) => !groupMemberIds.includes(u._id));
-        setAllUsers(potential);
-      }
-    } catch (error) {
-      console.error('Failed to fetch users', error);
-    }
-  };
-
-  const openAddMemberModal = () => {
-    setSelectedUserIds([]);
-    fetchPotentialMembers();
-    setAddMemberModalVisible(true);
-  };
-
-  const toggleUserSelection = (userId: string) => {
-    if (selectedUserIds.includes(userId)) {
-      setSelectedUserIds(selectedUserIds.filter(id => id !== userId));
-    } else {
-      setSelectedUserIds([...selectedUserIds, userId]);
-    }
-  };
-
-  const handleAddMembers = async () => {
-    if (selectedUserIds.length === 0) return;
+  // Fetch signed watch URL when a vlog is selected
+  const handlePlayVlog = async (vlog: Vlog) => {
+    setSelectedVlog(vlog);
+    setIsLoadingVideo(true);
+    setWatchUrl(null);
 
     try {
-      const res = await api.createInvitation(
-        currentUser!.id,
-        group.name,
-        selectedUserIds,
-        group._id
-      );
-
-      if (res.success) {
-        Alert.alert('Success', 'Invitations sent!');
-        setAddMemberModalVisible(false);
+      const response = await api.getWatchUrl(vlog.id);
+      if (response.success) {
+        setWatchUrl(response.watchUrl);
       } else {
-        Alert.alert('Error', 'Failed to send invitations');
+        Alert.alert('Error', 'Could not load video');
+        setSelectedVlog(null);
       }
     } catch (error) {
-      Alert.alert('Error', 'Network error');
+      console.error('Error fetching watch URL:', error);
+      Alert.alert('Error', 'Could not load video');
+      setSelectedVlog(null);
+    } finally {
+      setIsLoadingVideo(false);
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchGroup();
-    }, [id])
-  );
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchGroup();
-    setRefreshing(false);
+  // Clear watch URL when modal closes
+  const handleCloseModal = () => {
+    if (player) {
+      player.pause();
+    }
+    setSelectedVlog(null);
+    setWatchUrl(null);
   };
 
-  if (loading) {
+  // Fetch group and vlogs when component mounts
+  useEffect(() => {
+    if (id) {
+      fetchData();
+    }
+  }, [id]);
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const [groupRes, vlogsRes] = await Promise.all([
+        api.getGroup(String(id)),
+        api.getVlogs(String(id)),
+      ]);
+      if (groupRes.success) {
+        setGroup(groupRes.group);
+      }
+      if (vlogsRes.success) {
+        setVlogs(vlogsRes.vlogs);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Redirect if no user (e.g., after sign out)
+  if (!user) {
+    router.replace('/');
+    return null;
+  }
+
+  // Format duration from seconds to "M:SS" format
+  const formatDuration = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Format date to relative time
+  const formatTimestamp = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`;
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+  };
+
+  // ✅ IMPORTANT: inside component so it can access `id`
+  async function uploadVlog() {
+    try {
+      if (!id) throw new Error("Group ID missing (route param `id`)");
+
+      console.log("[UPLOAD] start");
+
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: "video/*",
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (picked.canceled) {
+        console.log("[UPLOAD] canceled");
+        return;
+      }
+
+      const asset = picked.assets?.[0];
+      if (!asset?.uri) throw new Error("No video selected");
+
+      const groupId = String(id);
+
+      // Detect MIME type (MOV support)
+      const uriLower = asset.uri.toLowerCase();
+      let contentType = asset.mimeType;
+      if (!contentType) {
+        if (uriLower.endsWith(".mov")) contentType = "video/quicktime";
+        else if (uriLower.endsWith(".mp4")) contentType = "video/mp4";
+        else contentType = "video/mp4";
+      }
+
+      console.log("[UPLOAD] picked", { uri: asset.uri, mime: asset.mimeType, contentType, groupId });
+
+      // 1) signed URL
+      console.log("[UPLOAD] requesting signed url...");
+      console.log(API_BASE);
+      const signedRes = await fetch(`${API_BASE}/api/vlogs/upload-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, groupId, contentType }),
+      });
+
+      const signedText = await signedRes.text();
+      console.log("[UPLOAD] upload-url status", signedRes.status, signedText);
+
+      let signedJson: any;
+      try {
+        signedJson = JSON.parse(signedText);
+      } catch {
+        throw new Error(`upload-url returned non-JSON (status ${signedRes.status})`);
+      }
+
+      if (!signedRes.ok || !signedJson.success) {
+        throw new Error(signedJson.message || "Failed to get upload URL");
+      }
+
+      const { uploadUrl, publicUrl, gcsPath } = signedJson;
+      console.log("[UPLOAD] got signed url", { gcsPath, publicUrl });
+
+      // 2) PUT to GCS
+      console.log("[UPLOAD] uploading to GCS...");
+
+      if (Platform.OS === "web") {
+        // Web: asset.uri is blob:http://... so fetch it as a Blob then PUT it
+        const blobRes = await fetch(asset.uri);
+        const blob = await blobRes.blob();
+
+        const putRes = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": contentType,
+          },
+          body: blob,
+        });
+
+        console.log("[UPLOAD] PUT(web) status", putRes.status);
+
+        if (!putRes.ok) {
+          const errText = await putRes.text().catch(() => "");
+          throw new Error(`GCS upload failed (web) status ${putRes.status} ${errText}`);
+        }
+      } else {
+        // Native: use expo-file-system
+        const putResult = await FileSystem.uploadAsync(uploadUrl, asset.uri, {
+          httpMethod: "PUT",
+          uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+          headers: { "Content-Type": contentType },
+        });
+
+        console.log("[UPLOAD] PUT(native) result", {
+          status: putResult.status,
+          body: putResult.body?.slice?.(0, 200),
+        });
+
+        if (putResult.status < 200 || putResult.status >= 300) {
+          throw new Error(`GCS upload failed (native) status ${putResult.status}`);
+        }
+      }
+
+
+      // 3) Create DB record
+      console.log("[UPLOAD] creating vlog record...");
+      const createRes = await fetch(`${API_BASE}/api/vlogs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          groupId,
+          gcsPath,
+          publicUrl,
+          duration: 0,
+          prompt: "",
+        }),
+      });
+
+      const createText = await createRes.text();
+      console.log("[UPLOAD] create status", createRes.status, createText);
+
+      let createJson: any;
+      try {
+        createJson = JSON.parse(createText);
+      } catch {
+        throw new Error(`create vlog returned non-JSON (status ${createRes.status})`);
+      }
+
+      if (!createRes.ok || !createJson.success) {
+        throw new Error(createJson.message || "Failed to save vlog");
+      }
+
+      console.log("[UPLOAD] DONE ✅", createJson);
+      Alert.alert("Uploaded!", "Vlog uploaded and saved.");
+      // Refresh vlogs to show the new upload
+      fetchData();
+    } catch (e: any) {
+      console.log("[UPLOAD] ERROR ❌", e);
+      Alert.alert("Upload failed", e?.message ?? "Unknown error");
+    }
+  }
+
+  // Show loading state
+  if (isLoading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={WaffleColors.carbonBlack} />
-      </View>
+      <>
+        <WaffleBackground />
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <Text style={styles.backText}>← Back</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={WaffleColors.yellow} />
+          </View>
+        </View>
+      </>
     );
   }
 
+  // Show error state if group not found
   if (!group) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text>Group not found</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backText}>← Go Back</Text>
-        </TouchableOpacity>
-      </View>
+      <>
+        <WaffleBackground />
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <Text style={styles.backText}>← Back</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorEmoji}>😕</Text>
+            <Text style={styles.errorTitle}>Group not found</Text>
+            <Text style={styles.errorSubtitle}>This group may have been deleted</Text>
+          </View>
+        </View>
+      </>
     );
   }
 
@@ -128,159 +308,27 @@ export default function GroupFeedScreen() {
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
+          <TouchableOpacity style={styles.menuButton}>
             <Text style={styles.menuText}>···</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Dropdown Menu Modal */}
-        <Modal
-          transparent={true}
-          visible={menuVisible}
-          animationType="fade"
-          onRequestClose={() => setMenuVisible(false)}
-        >
-          <TouchableWithoutFeedback onPress={() => setMenuVisible(false)}>
-            <View style={styles.modalOverlay}>
-              <View style={styles.menuContainer}>
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => {
-                    setMenuVisible(false);
-                    setMembersModalVisible(true);
-                  }}
-                >
-                  <Text style={styles.menuItemText}>👥 Members</Text>
-                </TouchableOpacity>
-                <View style={styles.menuSeparator} />
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={() => setMenuVisible(false)}
-                >
-                  <Text style={styles.menuItemText}>⚙️ Settings</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </TouchableWithoutFeedback>
-        </Modal>
-
-        {/* Members List Modal */}
-        <Modal
-          transparent={true}
-          visible={membersModalVisible}
-          animationType="slide"
-          onRequestClose={() => setMembersModalVisible(false)}
-        >
-          <View style={styles.modalCenterOverlay}>
-            <View style={styles.membersModalContainer}>
-              <View style={styles.membersModalHeader}>
-                <Text style={styles.membersModalTitle}>Members ({group.members?.length || 0})</Text>
-                <TouchableOpacity onPress={() => setMembersModalVisible(false)}>
-                  <Text style={styles.membersModalClose}>✕</Text>
-                </TouchableOpacity>
-              </View>
-              <ScrollView style={styles.membersList} contentContainerStyle={{ paddingBottom: 20 }}>
-                {group.members?.map((member: any) => (
-                  <View key={member._id} style={styles.membersListItem}>
-                    <View style={styles.memberAvatar}>
-                      <Text style={styles.memberEmoji}>{member.emoji || '👤'}</Text>
-                    </View>
-                    <View style={{ marginLeft: 12 }}>
-                      <Text style={styles.memberName}>{member.name}</Text>
-                      <Text style={styles.memberEmail}>{member.email}</Text>
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-
-        {/* Add Member Modal */}
-        <Modal
-          transparent={true}
-          visible={addMemberModalVisible}
-          animationType="slide"
-          onRequestClose={() => setAddMemberModalVisible(false)}
-        >
-          <View style={styles.modalCenterOverlay}>
-            <View style={styles.membersModalContainer}>
-              <View style={styles.membersModalHeader}>
-                <Text style={styles.membersModalTitle}>Add Members</Text>
-                <TouchableOpacity onPress={() => setAddMemberModalVisible(false)}>
-                  <Text style={styles.membersModalClose}>✕</Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.modalSubtitle}>Select friends to invite to {group.name}</Text>
-
-              <ScrollView style={styles.membersList} contentContainerStyle={{ paddingBottom: 20 }}>
-                {allUsers.length > 0 ? (
-                  allUsers.map((user: any) => {
-                    const isSelected = selectedUserIds.includes(user._id);
-                    return (
-                      <TouchableOpacity
-                        key={user._id}
-                        style={[styles.userSelectRow, isSelected && styles.userSelectRowActive]}
-                        onPress={() => toggleUserSelection(user._id)}
-                      >
-                        <View style={styles.userSelectInfo}>
-                          <View style={styles.memberAvatar}>
-                            <Text style={styles.memberEmoji}>{user.emoji || '👤'}</Text>
-                          </View>
-                          <Text style={styles.memberName}>{user.name}</Text>
-                        </View>
-                        <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
-                          {isSelected && <Text style={styles.checkboxCheck}>✓</Text>}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })
-                ) : (
-                  <View style={styles.emptyStateSmall}>
-                    <Text style={styles.emptyStateText}>No new users found to invite.</Text>
-                  </View>
-                )}
-              </ScrollView>
-
-              <TouchableOpacity
-                style={[
-                  styles.proceedButton,
-                  selectedUserIds.length === 0 && styles.proceedButtonDisabled
-                ]}
-                onPress={handleAddMembers}
-                disabled={selectedUserIds.length === 0}
-              >
-                <Text style={styles.proceedButtonText}>
-                  Invite {selectedUserIds.length > 0 ? `(${selectedUserIds.length})` : ''}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-
         {/* Group info */}
         <View style={styles.groupInfo}>
           <View style={styles.groupEmojiLarge}>
-            <Text style={styles.groupEmojiText}>{group.emoji || '🏠'}</Text>
+            <Text style={styles.groupEmojiText}>{group.emoji}</Text>
           </View>
           <Text style={styles.groupName}>{group.name}</Text>
-          <Text style={styles.groupMeta}>{group.members?.length || 0} members</Text>
+          <Text style={styles.groupMeta}>{group.memberCount} {group.memberCount === 1 ? 'member' : 'members'}</Text>
 
           {/* Member row */}
           <View style={styles.membersRow}>
-            {group.members?.slice(0, 5).map((member: any, index: number) => (
-              <View key={member._id} style={[styles.memberAvatar, { marginLeft: index > 0 ? -12 : 0 }]}>
-                <Text style={styles.memberEmoji}>{member.emoji || '👤'}</Text>
+            {group.members.map((member, index) => (
+              <View key={member.id} style={[styles.memberAvatar, { marginLeft: index > 0 ? -12 : 0 }]}>
+                <Text style={styles.memberEmoji}>{member.emoji}</Text>
               </View>
             ))}
-            {group.members?.length > 5 && (
-              <View style={[styles.memberAvatar, styles.memberAvatarMore, { marginLeft: -12 }]}>
-                <Text style={styles.memberMoreText}>+{group.members.length - 5}</Text>
-              </View>
-            )}
-            <TouchableOpacity style={styles.addMemberButton} onPress={openAddMemberModal}>
+            <TouchableOpacity style={styles.addMemberButton}>
               <Text style={styles.addMemberText}>+</Text>
             </TouchableOpacity>
           </View>
@@ -290,40 +338,7 @@ export default function GroupFeedScreen() {
           style={styles.feedContainer}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.feedContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
         >
-          {/* Weekly recap card */}
-          {id === '1' && (
-            <TouchableOpacity style={styles.recapCard} activeOpacity={0.9}>
-              <View style={styles.recapHeader}>
-                <Text style={styles.recapEmoji}>✨</Text>
-                <View style={styles.recapTitleContainer}>
-                  <Text style={styles.recapTitle}>Weekly Recap</Text>
-                  <Text style={styles.recapDate}>{weeklyRecap.generatedAt}</Text>
-                </View>
-                <View style={styles.recapBadge}>
-                  <Text style={styles.recapBadgeText}>AI</Text>
-                </View>
-              </View>
-              <Text style={styles.recapSummary} numberOfLines={3}>
-                {weeklyRecap.summary}
-              </Text>
-              <View style={styles.recapHighlights}>
-                {weeklyRecap.highlights.slice(0, 2).map((highlight, index) => (
-                  <View key={index} style={styles.highlightItem}>
-                    <Text style={styles.highlightBullet}>•</Text>
-                    <Text style={styles.highlightText}>{highlight}</Text>
-                  </View>
-                ))}
-              </View>
-              <Text style={styles.recapAction}>Listen to full recap →</Text>
-              {/* Scribble decoration */}
-              <Text style={styles.recapScribble}>{"~magic~"}</Text>
-            </TouchableOpacity>
-          )}
-
           {/* Section header */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Vlogs</Text>
@@ -331,23 +346,24 @@ export default function GroupFeedScreen() {
           </View>
 
           {/* Vlog feed */}
-          {groupVlogs.length > 0 ? (
-            groupVlogs.map((vlog) => (
-              <TouchableOpacity key={vlog.id} style={styles.vlogCard} activeOpacity={0.9}>
-                {/* Video thumbnail */}
-                <View style={styles.vlogThumbnail}>
+          {vlogs.length > 0 ? (
+            vlogs.map((vlog) => (
+              <View key={vlog.id} style={styles.vlogCard}>
+                <TouchableOpacity
+                  style={styles.vlogThumbnail}
+                  activeOpacity={0.9}
+                  onPress={() => handlePlayVlog(vlog)}
+                >
                   <View style={styles.vlogPlayButton}>
                     <Text style={styles.vlogPlayIcon}>▶</Text>
                   </View>
                   <View style={styles.vlogDuration}>
-                    <Text style={styles.vlogDurationText}>{vlog.duration}</Text>
+                    <Text style={styles.vlogDurationText}>{formatDuration(vlog.duration)}</Text>
                   </View>
                   {!vlog.hasViewed && <View style={styles.vlogUnwatchedDot} />}
-                  {/* Scribble border effect */}
                   <View style={styles.vlogThumbnailBorder} />
-                </View>
+                </TouchableOpacity>
 
-                {/* Vlog info */}
                 <View style={styles.vlogInfo}>
                   <View style={styles.vlogUserRow}>
                     <View style={styles.vlogUserAvatar}>
@@ -355,12 +371,11 @@ export default function GroupFeedScreen() {
                     </View>
                     <View style={styles.vlogUserInfo}>
                       <Text style={styles.vlogUserName}>{vlog.userName}</Text>
-                      <Text style={styles.vlogTimestamp}>{vlog.timestamp}</Text>
+                      <Text style={styles.vlogTimestamp}>{formatTimestamp(vlog.createdAt)}</Text>
                     </View>
                   </View>
-                  <Text style={styles.vlogPrompt}>"{vlog.prompt}"</Text>
+                  {vlog.prompt ? <Text style={styles.vlogPrompt}>"{vlog.prompt}"</Text> : null}
 
-                  {/* Actions */}
                   <View style={styles.vlogActions}>
                     <TouchableOpacity style={styles.vlogActionButton}>
                       <Text style={styles.vlogActionText}>💬 Reply</Text>
@@ -370,7 +385,7 @@ export default function GroupFeedScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
-              </TouchableOpacity>
+              </View>
             ))
           ) : (
             <View style={styles.emptyState}>
@@ -380,19 +395,73 @@ export default function GroupFeedScreen() {
             </View>
           )}
 
-          {/* Spacer */}
           <View style={{ height: 100 }} />
         </ScrollView>
 
-        {/* Record FAB */}
-        <TouchableOpacity style={styles.recordFab} activeOpacity={0.9}>
-          <Text style={styles.recordFabIcon}>🎬</Text>
-          <Text style={styles.recordFabText}>Record</Text>
+        {/* Upload FAB */}
+        <TouchableOpacity style={styles.recordFab} activeOpacity={0.9} onPress={uploadVlog}>
+          <Text style={styles.recordFabIcon}>📤</Text>
+          <Text style={styles.recordFabText}>Upload</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Video Player Modal */}
+      <Modal
+        visible={!!selectedVlog}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={handleCloseModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {/* Close button */}
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={handleCloseModal}
+            >
+              <Text style={styles.modalCloseText}>✕</Text>
+            </TouchableOpacity>
+
+            {/* Video player */}
+            {isLoadingVideo ? (
+              <View style={styles.videoLoading}>
+                <ActivityIndicator size="large" color={WaffleColors.yellow} />
+                <Text style={styles.videoLoadingText}>Loading video...</Text>
+              </View>
+            ) : watchUrl ? (
+              <VideoView
+                player={player}
+                style={styles.videoPlayer}
+                contentFit="contain"
+                allowsFullscreen
+                allowsPictureInPicture
+              />
+            ) : null}
+
+            {/* Video info */}
+            {selectedVlog && (
+              <View style={styles.modalInfo}>
+                <View style={styles.modalUserRow}>
+                  <View style={styles.modalUserAvatar}>
+                    <Text style={styles.modalUserEmoji}>{selectedVlog.userEmoji}</Text>
+                  </View>
+                  <View>
+                    <Text style={styles.modalUserName}>{selectedVlog.userName}</Text>
+                    <Text style={styles.modalTimestamp}>{formatTimestamp(selectedVlog.createdAt)}</Text>
+                  </View>
+                </View>
+                {selectedVlog.prompt ? (
+                  <Text style={styles.modalPrompt}>"{selectedVlog.prompt}"</Text>
+                ) : null}
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -772,170 +841,116 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: WaffleColors.carbonBlack,
   },
-  modalOverlay: {
+  loadingContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
-    paddingTop: 80,
-    paddingRight: 24,
-  },
-  modalCenterOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
   },
-  menuContainer: {
-    backgroundColor: WaffleColors.white,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: WaffleColors.carbonBlack,
-    width: 200,
-    paddingVertical: 8,
-    shadowColor: WaffleColors.carbonBlack,
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
   },
-  menuItem: {
-    paddingVertical: 12,
+  errorEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: WaffleColors.carbonBlack,
+    marginBottom: 8,
+  },
+  errorSubtitle: {
+    fontSize: 14,
+    color: WaffleColors.charcoal,
+    textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 500,
     paddingHorizontal: 16,
   },
-  menuItemText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: WaffleColors.carbonBlack,
-  },
-  menuSeparator: {
-    height: 1,
-    backgroundColor: WaffleColors.dustGrey,
-    marginVertical: 4,
-  },
-  membersModalContainer: {
-    backgroundColor: WaffleColors.parchment,
-    width: '100%',
-    maxHeight: '70%',
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: WaffleColors.carbonBlack,
-    padding: 20,
-    shadowColor: WaffleColors.carbonBlack,
-    shadowOffset: { width: 6, height: 6 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-  },
-  membersModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  modalCloseButton: {
+    position: 'absolute',
+    top: -50,
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: WaffleColors.white,
     alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: WaffleColors.charcoal,
+    justifyContent: 'center',
+    zIndex: 10,
   },
-  membersModalTitle: {
+  modalCloseText: {
     fontSize: 20,
     fontWeight: '700',
     color: WaffleColors.carbonBlack,
   },
-  membersModalClose: {
-    fontSize: 24,
-    color: WaffleColors.charcoal,
-    fontWeight: '700',
-  },
-  membersList: {
+  videoPlayer: {
     width: '100%',
+    aspectRatio: 9 / 16,
+    backgroundColor: WaffleColors.carbonBlack,
+    borderRadius: 16,
   },
-  membersListItem: {
+  videoLoading: {
+    width: '100%',
+    aspectRatio: 9 / 16,
+    backgroundColor: WaffleColors.carbonBlack,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoLoadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: WaffleColors.white,
+  },
+  modalInfo: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: WaffleColors.parchment,
+    borderRadius: 16,
+  },
+  modalUserRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
+    marginBottom: 8,
   },
-  memberName: {
+  modalUserAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: WaffleColors.yellow,
+    borderWidth: 2,
+    borderColor: WaffleColors.carbonBlack,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  modalUserEmoji: {
+    fontSize: 20,
+  },
+  modalUserName: {
     fontSize: 16,
     fontWeight: '600',
     color: WaffleColors.carbonBlack,
   },
-  memberEmail: {
+  modalTimestamp: {
     fontSize: 12,
     color: WaffleColors.charcoal,
-    marginTop: 2,
   },
-  modalSubtitle: {
+  modalPrompt: {
     fontSize: 14,
-    color: WaffleColors.charcoal,
-    marginBottom: 16,
-  },
-  userSelectRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  userSelectRowActive: {
-    backgroundColor: 'rgba(255, 199, 0, 0.1)', // Light yellow
-    borderColor: WaffleColors.yellow,
-  },
-  userSelectInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: WaffleColors.dustGrey,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxActive: {
-    backgroundColor: WaffleColors.yellow,
-    borderColor: WaffleColors.carbonBlack,
-  },
-  checkboxCheck: {
-    fontSize: 14,
-    color: WaffleColors.carbonBlack,
-    fontWeight: '700',
-  },
-  emptyStateSmall: {
-    padding: 24,
-    alignItems: 'center',
-  },
-  emptyStateText: {
     color: WaffleColors.charcoal,
     fontStyle: 'italic',
-  },
-  proceedButton: {
-    backgroundColor: WaffleColors.yellow,
-    borderRadius: 100,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 16,
-    borderWidth: 2,
-    borderColor: WaffleColors.carbonBlack,
-    shadowColor: WaffleColors.carbonBlack,
-    shadowOffset: { width: 3, height: 3 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-  },
-  proceedButtonDisabled: {
-    backgroundColor: WaffleColors.dustGrey,
-    borderColor: WaffleColors.charcoal,
-    shadowOpacity: 0,
-  },
-  proceedButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: WaffleColors.carbonBlack,
   },
 });

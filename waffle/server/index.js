@@ -4,8 +4,9 @@ const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
-const groupRoutes = require('./routes/group');
 const userRoutes = require('./routes/user');
+const groupRoutes = require('./routes/groups');
+const vlogRoutes = require('./routes/vlogs');
 
 const app = express();
 
@@ -16,6 +17,7 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/groups', groupRoutes);
+app.use('/api/vlogs', vlogRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/invitations', require('./routes/invitation'));
 
