@@ -46,7 +46,8 @@
           "color": "#FFD700",
           "sounds": []
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

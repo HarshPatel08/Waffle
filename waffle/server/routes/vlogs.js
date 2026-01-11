@@ -94,6 +94,56 @@ router.post('/upload-url', async (req, res) => {
   }
 });
 
+// @route   GET /api/vlogs/watch/:vlogId
+// @desc    Get a signed URL for watching a vlog
+// @access  Private
+router.get('/watch/:vlogId', async (req, res) => {
+  try {
+    const { vlogId } = req.params;
+    console.log('[VLOGS] Generating watch URL for:', vlogId);
+
+    const vlog = await Vlog.findById(vlogId);
+
+    if (!vlog) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vlog not found',
+      });
+    }
+
+    if (!storage) {
+      return res.status(500).json({
+        success: false,
+        message: 'Storage service not configured',
+      });
+    }
+
+    const bucket = storage.bucket(bucketName);
+    const file = bucket.file(vlog.gcsPath);
+
+    // Generate signed URL for reading - 1 hour expiry
+    const [signedUrl] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'read',
+      expires: Date.now() + 60 * 60 * 1000, // 1 hour
+    });
+
+    console.log('[VLOGS] Watch URL generated for:', vlogId);
+
+    res.json({
+      success: true,
+      watchUrl: signedUrl,
+      expiresIn: 3600, // 1 hour in seconds
+    });
+  } catch (error) {
+    console.error('[VLOGS] Error generating watch URL:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate watch URL',
+    });
+  }
+});
+
 // @route   POST /api/vlogs
 // @desc    Create vlog record after successful upload
 // @access  Private

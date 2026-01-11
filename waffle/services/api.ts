@@ -51,6 +51,18 @@ interface CreateGroupData {
   createdBy: string;
 }
 
+interface Vlog {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmoji: string;
+  publicUrl: string;
+  duration: number;
+  prompt: string;
+  createdAt: string;
+  hasViewed?: boolean;
+}
+
 class ApiService {
   private baseUrl: string;
 
@@ -138,7 +150,17 @@ class ApiService {
     });
     return response.json();
   }
+
+  async getVlogs(groupId: string): Promise<{ success: boolean; vlogs: Vlog[] }> {
+    const response = await fetch(`${this.baseUrl}/api/vlogs/group/${groupId}`);
+    return response.json();
+  }
+
+  async getWatchUrl(vlogId: string): Promise<{ success: boolean; watchUrl: string; expiresIn: number }> {
+    const response = await fetch(`${this.baseUrl}/api/vlogs/watch/${vlogId}`);
+    return response.json();
+  }
 }
 
 export const api = new ApiService();
-export type { User, SignUpData, SignInData, ApiResponse, Group, GroupMember, CreateGroupData };
+export type { User, SignUpData, SignInData, ApiResponse, Group, GroupMember, CreateGroupData, Vlog };

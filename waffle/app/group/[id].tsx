@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Modal } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { WaffleColors } from "@/constants/theme";
-import { vlogs, weeklyRecap } from "@/constants/mockData";
 import { WaffleBackground } from "@/components/waffle-background";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import { Platform } from "react-native";
 import { useAuth } from '@/context/AuthContext';
-import { api, Group } from '@/services/api';
+import { api, Group, Vlog } from '@/services/api';
+import { useVideoPlayer, VideoView } from 'expo-video';
 
 const API_BASE = "http://localhost:3001"; // TODO: replace with your Mac IP + backend port
 
@@ -17,24 +17,73 @@ export default function GroupFeedScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const [group, setGroup] = useState<Group | null>(null);
+  const [vlogs, setVlogs] = useState<Vlog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedVlog, setSelectedVlog] = useState<Vlog | null>(null);
+  const [watchUrl, setWatchUrl] = useState<string | null>(null);
+  const [isLoadingVideo, setIsLoadingVideo] = useState(false);
 
-  // Fetch group data when component mounts
+  // Video player for the selected vlog
+  const player = useVideoPlayer(watchUrl, (player) => {
+    if (watchUrl) {
+      player.play();
+    }
+  });
+
+  // Fetch signed watch URL when a vlog is selected
+  const handlePlayVlog = async (vlog: Vlog) => {
+    setSelectedVlog(vlog);
+    setIsLoadingVideo(true);
+    setWatchUrl(null);
+
+    try {
+      const response = await api.getWatchUrl(vlog.id);
+      if (response.success) {
+        setWatchUrl(response.watchUrl);
+      } else {
+        Alert.alert('Error', 'Could not load video');
+        setSelectedVlog(null);
+      }
+    } catch (error) {
+      console.error('Error fetching watch URL:', error);
+      Alert.alert('Error', 'Could not load video');
+      setSelectedVlog(null);
+    } finally {
+      setIsLoadingVideo(false);
+    }
+  };
+
+  // Clear watch URL when modal closes
+  const handleCloseModal = () => {
+    if (player) {
+      player.pause();
+    }
+    setSelectedVlog(null);
+    setWatchUrl(null);
+  };
+
+  // Fetch group and vlogs when component mounts
   useEffect(() => {
     if (id) {
-      fetchGroup();
+      fetchData();
     }
   }, [id]);
 
-  const fetchGroup = async () => {
+  const fetchData = async () => {
     try {
       setIsLoading(true);
-      const response = await api.getGroup(String(id));
-      if (response.success) {
-        setGroup(response.group);
+      const [groupRes, vlogsRes] = await Promise.all([
+        api.getGroup(String(id)),
+        api.getVlogs(String(id)),
+      ]);
+      if (groupRes.success) {
+        setGroup(groupRes.group);
+      }
+      if (vlogsRes.success) {
+        setVlogs(vlogsRes.vlogs);
       }
     } catch (error) {
-      console.error('Error fetching group:', error);
+      console.error('Error fetching data:', error);
     } finally {
       setIsLoading(false);
     }
@@ -46,7 +95,29 @@ export default function GroupFeedScreen() {
     return null;
   }
 
-  const groupVlogs = vlogs.filter((v) => v.groupId === id);
+  // Format duration from seconds to "M:SS" format
+  const formatDuration = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Format date to relative time
+  const formatTimestamp = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`;
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+  };
 
   // ✅ IMPORTANT: inside component so it can access `id`
   async function uploadVlog() {
@@ -180,6 +251,8 @@ export default function GroupFeedScreen() {
 
       console.log("[UPLOAD] DONE ✅", createJson);
       Alert.alert("Uploaded!", "Vlog uploaded and saved.");
+      // Refresh vlogs to show the new upload
+      fetchData();
     } catch (e: any) {
       console.log("[UPLOAD] ERROR ❌", e);
       Alert.alert("Upload failed", e?.message ?? "Unknown error");
@@ -266,55 +339,30 @@ export default function GroupFeedScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.feedContent}
         >
-          {/* Weekly recap card */}
-          {id === "1" && (
-            <TouchableOpacity style={styles.recapCard} activeOpacity={0.9}>
-              <View style={styles.recapHeader}>
-                <Text style={styles.recapEmoji}>✨</Text>
-                <View style={styles.recapTitleContainer}>
-                  <Text style={styles.recapTitle}>Weekly Recap</Text>
-                  <Text style={styles.recapDate}>{weeklyRecap.generatedAt}</Text>
-                </View>
-                <View style={styles.recapBadge}>
-                  <Text style={styles.recapBadgeText}>AI</Text>
-                </View>
-              </View>
-              <Text style={styles.recapSummary} numberOfLines={3}>
-                {weeklyRecap.summary}
-              </Text>
-              <View style={styles.recapHighlights}>
-                {weeklyRecap.highlights.slice(0, 2).map((highlight, index) => (
-                  <View key={index} style={styles.highlightItem}>
-                    <Text style={styles.highlightBullet}>•</Text>
-                    <Text style={styles.highlightText}>{highlight}</Text>
-                  </View>
-                ))}
-              </View>
-              <Text style={styles.recapAction}>Listen to full recap →</Text>
-              <Text style={styles.recapScribble}>{"~magic~"}</Text>
-            </TouchableOpacity>
-          )}
-
           {/* Section header */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Vlogs</Text>
             <Text style={styles.sectionSubtitle}>from your friends</Text>
           </View>
 
-          {/* Vlog feed (still mock data) */}
-          {groupVlogs.length > 0 ? (
-            groupVlogs.map((vlog) => (
-              <TouchableOpacity key={vlog.id} style={styles.vlogCard} activeOpacity={0.9}>
-                <View style={styles.vlogThumbnail}>
+          {/* Vlog feed */}
+          {vlogs.length > 0 ? (
+            vlogs.map((vlog) => (
+              <View key={vlog.id} style={styles.vlogCard}>
+                <TouchableOpacity
+                  style={styles.vlogThumbnail}
+                  activeOpacity={0.9}
+                  onPress={() => handlePlayVlog(vlog)}
+                >
                   <View style={styles.vlogPlayButton}>
                     <Text style={styles.vlogPlayIcon}>▶</Text>
                   </View>
                   <View style={styles.vlogDuration}>
-                    <Text style={styles.vlogDurationText}>{vlog.duration}</Text>
+                    <Text style={styles.vlogDurationText}>{formatDuration(vlog.duration)}</Text>
                   </View>
                   {!vlog.hasViewed && <View style={styles.vlogUnwatchedDot} />}
                   <View style={styles.vlogThumbnailBorder} />
-                </View>
+                </TouchableOpacity>
 
                 <View style={styles.vlogInfo}>
                   <View style={styles.vlogUserRow}>
@@ -323,10 +371,10 @@ export default function GroupFeedScreen() {
                     </View>
                     <View style={styles.vlogUserInfo}>
                       <Text style={styles.vlogUserName}>{vlog.userName}</Text>
-                      <Text style={styles.vlogTimestamp}>{vlog.timestamp}</Text>
+                      <Text style={styles.vlogTimestamp}>{formatTimestamp(vlog.createdAt)}</Text>
                     </View>
                   </View>
-                  <Text style={styles.vlogPrompt}>"{vlog.prompt}"</Text>
+                  {vlog.prompt ? <Text style={styles.vlogPrompt}>"{vlog.prompt}"</Text> : null}
 
                   <View style={styles.vlogActions}>
                     <TouchableOpacity style={styles.vlogActionButton}>
@@ -337,7 +385,7 @@ export default function GroupFeedScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
-              </TouchableOpacity>
+              </View>
             ))
           ) : (
             <View style={styles.emptyState}>
@@ -356,6 +404,60 @@ export default function GroupFeedScreen() {
           <Text style={styles.recordFabText}>Upload</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Video Player Modal */}
+      <Modal
+        visible={!!selectedVlog}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={handleCloseModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {/* Close button */}
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={handleCloseModal}
+            >
+              <Text style={styles.modalCloseText}>✕</Text>
+            </TouchableOpacity>
+
+            {/* Video player */}
+            {isLoadingVideo ? (
+              <View style={styles.videoLoading}>
+                <ActivityIndicator size="large" color={WaffleColors.yellow} />
+                <Text style={styles.videoLoadingText}>Loading video...</Text>
+              </View>
+            ) : watchUrl ? (
+              <VideoView
+                player={player}
+                style={styles.videoPlayer}
+                contentFit="contain"
+                allowsFullscreen
+                allowsPictureInPicture
+              />
+            ) : null}
+
+            {/* Video info */}
+            {selectedVlog && (
+              <View style={styles.modalInfo}>
+                <View style={styles.modalUserRow}>
+                  <View style={styles.modalUserAvatar}>
+                    <Text style={styles.modalUserEmoji}>{selectedVlog.userEmoji}</Text>
+                  </View>
+                  <View>
+                    <Text style={styles.modalUserName}>{selectedVlog.userName}</Text>
+                    <Text style={styles.modalTimestamp}>{formatTimestamp(selectedVlog.createdAt)}</Text>
+                  </View>
+                </View>
+                {selectedVlog.prompt ? (
+                  <Text style={styles.modalPrompt}>"{selectedVlog.prompt}"</Text>
+                ) : null}
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -755,5 +857,91 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: WaffleColors.charcoal,
     textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 500,
+    paddingHorizontal: 16,
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: -50,
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: WaffleColors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  modalCloseText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: WaffleColors.carbonBlack,
+  },
+  videoPlayer: {
+    width: '100%',
+    aspectRatio: 9 / 16,
+    backgroundColor: WaffleColors.carbonBlack,
+    borderRadius: 16,
+  },
+  videoLoading: {
+    width: '100%',
+    aspectRatio: 9 / 16,
+    backgroundColor: WaffleColors.carbonBlack,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoLoadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: WaffleColors.white,
+  },
+  modalInfo: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: WaffleColors.parchment,
+    borderRadius: 16,
+  },
+  modalUserRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  modalUserAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: WaffleColors.yellow,
+    borderWidth: 2,
+    borderColor: WaffleColors.carbonBlack,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  modalUserEmoji: {
+    fontSize: 20,
+  },
+  modalUserName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WaffleColors.carbonBlack,
+  },
+  modalTimestamp: {
+    fontSize: 12,
+    color: WaffleColors.charcoal,
+  },
+  modalPrompt: {
+    fontSize: 14,
+    color: WaffleColors.charcoal,
+    fontStyle: 'italic',
   },
 });
