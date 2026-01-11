@@ -32,7 +32,7 @@ try {
   console.error('[GCS] Failed to initialize:', error.message);
 }
 
-const bucketName = process.env.GCS_BUCKET_NAME || 'waffle-user-videos';
+const bucketName = process.env.GCS_BUCKET_NAME || 'waffle-user-videos-uscentral';
 
 // @route   POST /api/vlogs/upload-url
 // @desc    Generate a signed URL for video upload
@@ -320,6 +320,82 @@ router.delete('/:vlogId', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete vlog',
+    });
+  }
+});
+
+// @route   POST /api/vlogs/:vlogId/react
+// @desc    Add or toggle a reaction on a vlog
+// @access  Private
+router.post('/:vlogId/react', async (req, res) => {
+  try {
+    const { vlogId } = req.params;
+    const { userId, reactionType } = req.body;
+
+    console.log('[VLOGS] Reaction:', { vlogId, userId, reactionType });
+
+    if (!userId || !reactionType) {
+      return res.status(400).json({
+        success: false,
+        message: 'userId and reactionType are required',
+      });
+    }
+
+    const validTypes = ['like', 'fire', 'heart', 'skull', 'laughing'];
+    if (!validTypes.includes(reactionType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid reaction type',
+      });
+    }
+
+    const vlog = await Vlog.findById(vlogId);
+
+    if (!vlog) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vlog not found',
+      });
+    }
+
+    // Check if user already has this reaction
+    const existingReactionIndex = vlog.reactions.findIndex(
+      (r) => r.userId.toString() === userId && r.type === reactionType
+    );
+
+    if (existingReactionIndex > -1) {
+      // Remove the reaction (toggle off)
+      vlog.reactions.splice(existingReactionIndex, 1);
+    } else {
+      // Add the reaction
+      vlog.reactions.push({ userId, type: reactionType });
+    }
+
+    await vlog.save();
+
+    // Count reactions by type
+    const reactionCounts = {};
+    validTypes.forEach((type) => {
+      reactionCounts[type] = vlog.reactions.filter((r) => r.type === type).length;
+    });
+
+    // Get user's reactions
+    const userReactions = vlog.reactions
+      .filter((r) => r.userId.toString() === userId)
+      .map((r) => r.type);
+
+    console.log('[VLOGS] Reaction updated:', { vlogId, reactionCounts });
+
+    res.json({
+      success: true,
+      reactionCounts,
+      userReactions,
+    });
+  } catch (error) {
+    console.error('[VLOGS] Error updating reaction:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update reaction',
     });
   }
 });

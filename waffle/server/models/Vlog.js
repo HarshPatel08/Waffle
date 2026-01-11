@@ -43,6 +43,21 @@ const vlogSchema = new mongoose.Schema(
         ref: 'User',
       },
     ],
+    // Reactions (like, fire, heart, skull, laughing)
+    reactions: [
+      {
+        userId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User',
+          required: true,
+        },
+        type: {
+          type: String,
+          enum: ['like', 'fire', 'heart', 'skull', 'laughing'],
+          required: true,
+        },
+      },
+    ],
   },
   {
     timestamps: true,
