@@ -1,0 +1,329 @@
+# Prompt Generation Feature - Code to Copy
+
+This document contains all the code needed to add the Gemini-powered prompt generation feature to your remote repository.
+
+## 1. Package Dependency
+
+Add to `package.json` dependencies:
+```json
+"@google/generative-ai": "^0.24.1"
+```
+
+Then run: `npm install` or `yarn add @google/generative-ai`
+
+---
+
+## 2. Environment Variable
+
+Add to `.env` file:
+```
+EXPO_PUBLIC_GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+**Note:** Replace `your_gemini_api_key_here` with your actual Gemini API key.
+
+---
+
+## 3. Import Statement
+
+Add this import at the top of `waffle/app/group/[id].tsx` (after other imports):
+```typescript
+import { GoogleGenerativeAI } from '@google/generative-ai';
+```
+
+---
+
+## 4. State Variables
+
+Add these state variables inside your component (after other useState declarations):
+```typescript
+const [currentPrompt, setCurrentPrompt] = useState<string | null>(null);
+const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
+```
+
+---
+
+## 5. Helper Function: calculatePostingFrequency
+
+Add this function inside your component (before the generatePrompt function):
+```typescript
+// Calculate posting frequency based on vlog activity
+const calculatePostingFrequency = (): 'daily' | 'weekly' | 'monthly' | 'occasional' => {
+  if (vlogs.length === 0) return 'occasional';
+  
+  // Analyze recent vlog timestamps to determine frequency
+  const recentVlogs = vlogs.slice(0, 10);
+  
+  // Count vlogs by recency
+  const todayCount = recentVlogs.filter(vlog => {
+    const createdAt = new Date(vlog.createdAt);
+    const now = new Date();
+    const diffMs = now.getTime() - createdAt.getTime();
+    const diffHours = Math.floor(diffMs / 3600000);
+    return diffHours < 24;
+  }).length;
+  
+  const thisWeekCount = recentVlogs.filter(vlog => {
+    const createdAt = new Date(vlog.createdAt);
+    const now = new Date();
+    const diffMs = now.getTime() - createdAt.getTime();
+    const diffDays = Math.floor(diffMs / 86400000);
+    return diffDays < 7;
+  }).length;
+  
+  // Determine frequency based on activity patterns
+  // Daily: Multiple posts today/yesterday
+  if (todayCount >= 2 || (recentVlogs.length >= 5 && todayCount >= 1)) {
+    return 'daily';
+  }
+  
+  // Weekly: Regular posts within the week
+  if (thisWeekCount >= 2 || recentVlogs.length >= 3) {
+    return 'weekly';
+  }
+  
+  // Monthly: Some activity but less frequent
+  if (recentVlogs.length >= 1) {
+    return 'monthly';
+  }
+  
+  // Occasional: Very few or no recent posts
+  return 'occasional';
+};
+```
+
+**Note:** Adjust the `vlogs` reference to match your data structure. If you use a different variable name (like `groupVlogs`), update accordingly.
+
+---
+
+## 6. useEffect Hook
+
+Add this useEffect to trigger prompt generation when the group loads:
+```typescript
+// Generate prompt when group screen loads
+useEffect(() => {
+  if (id && vlogs) {
+    generatePrompt();
+  }
+}, [id]);
+```
+
+**Note:** Adjust the dependency array `[id]` to include any dependencies your component needs (e.g., `vlogs`, `group`).
+
+---
+
+## 7. Main Function: generatePrompt
+
+Add this complete function inside your component:
+```typescript
+const generatePrompt = async () => {
+  setIsLoadingPrompt(true);
+  try {
+    // Get API key from environment
+    const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error('Gemini API key not found. Add EXPO_PUBLIC_GEMINI_API_KEY to your .env file');
+    }
+
+    // Get previous prompts from existing vlogs to avoid repetition
+    const previousPrompts = vlogs
+      .slice(0, 5)
+      .map(vlog => vlog.prompt)
+      .filter((prompt, index, self) => prompt && self.indexOf(prompt) === index); // Remove duplicates and nulls
+
+    const postingFrequency = calculatePostingFrequency();
+
+    // Build frequency-specific instructions
+    let frequencyInstructions = '';
+    switch (postingFrequency) {
+      case 'daily':
+        frequencyInstructions = 'Since this group posts DAILY, make the prompt about TODAY\'s specific moment, small wins, or quick updates. Keep it light and current.';
+        break;
+      case 'weekly':
+        frequencyInstructions = 'Since this group posts WEEKLY, make the prompt about the WEEK - highlights, something new, or a moment worth sharing from the past few days.';
+        break;
+      case 'monthly':
+        frequencyInstructions = 'Since this group posts MONTHLY, make the prompt about bigger updates - life changes, accomplishments, or meaningful moments from the past month.';
+        break;
+      case 'occasional':
+      default:
+        frequencyInstructions = 'Since this group posts OCCASIONALLY, make the prompt open-ended and flexible - about what\'s new, what matters, or something worth catching up on.';
+    }
+
+    // Build the prompt for Gemini
+    const systemPrompt = `Generate a complete sentence question for a casual vlog prompt. These are casual 1-2 minute video updates.
+
+Posting frequency: ${postingFrequency}
+${frequencyInstructions}
+
+${previousPrompts && previousPrompts.length > 0 
+  ? `Previous prompts: ${previousPrompts.join(', ')}\nMake sure your new prompt is different.`
+  : ''
+}
+
+Generate ONE complete sentence question (8-12 words) that:
+- Is a full question sentence (must have a question mark)
+- Is casual and friendly
+- Is easy to answer in a short video
+- Is different from previous prompts
+
+Examples of good prompts (complete sentences):
+- "What made you laugh this week?"
+- "Who did you hang out with recently?"
+- "What's something you're excited about?"
+
+Return ONLY the complete question sentence, no quotes, no explanations.`;
+
+    // Call Gemini using SDK (uses v1beta by default)
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-2.5-flash',
+      generationConfig: {
+        maxOutputTokens: 750,
+        temperature: 0.7,
+      }
+    });
+    
+    console.log('[PROMPTS] Calling Gemini API with gemini-2.5-flash...');
+    
+    const result = await model.generateContent(systemPrompt);
+    const response = await result.response;
+    let promptText = response.text().trim();
+    
+    // Clean up the prompt (remove quotes if Gemini added them)
+    promptText = promptText.replace(/^["']|["']$/g, '').trim();
+    
+    // Validate word count and completeness
+    const wordCount = promptText.split(/\s+/).filter(word => word.length > 0).length;
+    const hasQuestionMark = promptText.includes('?');
+    const isCompleteSentence = wordCount >= 6 && hasQuestionMark && promptText.length > 15;
+    
+    console.log(`[PROMPTS] Generated prompt (${wordCount} words, has ?: ${hasQuestionMark}): "${promptText}"`);
+    
+    // Handle prompts that are too short, incomplete, or too long
+    let cleanPrompt = promptText;
+    if (!isCompleteSentence) {
+      // Not a complete sentence, use fallback
+      console.log('[PROMPTS] Prompt is not a complete sentence, using fallback');
+      cleanPrompt = "What made you laugh this week?";
+    } else if (wordCount > 15) {
+      // Too long, truncate to 15 words but keep the question mark
+      const words = promptText.split(/\s+/).filter(word => word.length > 0);
+      cleanPrompt = words.slice(0, 15).join(' ');
+      if (!cleanPrompt.includes('?')) {
+        cleanPrompt += '?';
+      }
+      console.log(`[PROMPTS] Prompt too long, truncated to 15 words: "${cleanPrompt}"`);
+    }
+    
+    console.log('[PROMPTS] Final prompt:', cleanPrompt);
+    setCurrentPrompt(cleanPrompt);
+  } catch (error) {
+    console.error('Error generating prompt:', error);
+    // Fallback prompt if API fails
+    setCurrentPrompt("What's been the highlight of your week?");
+  } finally {
+    setIsLoadingPrompt(false);
+  }
+};
+```
+
+**Note:** Replace `vlogs` with your actual vlogs array variable name if different.
+
+---
+
+## 8. UI Component: Prompt Card
+
+Add this JSX code in your ScrollView, before the vlogs list (adjust placement as needed):
+```typescript
+{/* AI Generated Prompt Card */}
+<View style={styles.promptCard}>
+  <View style={styles.promptHeader}>
+    <Text style={styles.promptEmoji}>✨</Text>
+    <Text style={styles.promptLabel}>Today's Prompt</Text>
+    {isLoadingPrompt && (
+      <ActivityIndicator size="small" color={WaffleColors.charcoal} style={{ marginLeft: 8 }} />
+    )}
+  </View>
+  {currentPrompt ? (
+    <Text style={styles.promptText}>"{currentPrompt}"</Text>
+  ) : (
+    <Text style={styles.promptTextPlaceholder}>Generating prompt...</Text>
+  )}
+</View>
+```
+
+---
+
+## 9. Styles
+
+Add these styles to your StyleSheet:
+```typescript
+promptCard: {
+  backgroundColor: WaffleColors.yellow,
+  borderRadius: 20,
+  borderWidth: 2,
+  borderColor: WaffleColors.carbonBlack,
+  padding: 20,
+  marginBottom: 24,
+},
+promptHeader: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginBottom: 12,
+},
+promptEmoji: {
+  fontSize: 20,
+  marginRight: 8,
+},
+promptLabel: {
+  fontSize: 14,
+  fontWeight: '700',
+  color: WaffleColors.carbonBlack,
+  textTransform: 'uppercase',
+  letterSpacing: 0.5,
+},
+promptText: {
+  fontSize: 18,
+  fontWeight: '600',
+  color: WaffleColors.carbonBlack,
+  fontStyle: 'italic',
+  lineHeight: 26,
+},
+promptTextPlaceholder: {
+  fontSize: 16,
+  color: WaffleColors.charcoal,
+  fontStyle: 'italic',
+},
+```
+
+---
+
+## Summary Checklist
+
+- [ ] Add `@google/generative-ai` to package.json and run npm install
+- [ ] Add `EXPO_PUBLIC_GEMINI_API_KEY` to .env file
+- [ ] Add `GoogleGenerativeAI` import
+- [ ] Add state variables (`currentPrompt`, `isLoadingPrompt`)
+- [ ] Add `calculatePostingFrequency` function
+- [ ] Add `useEffect` hook to trigger generation
+- [ ] Add `generatePrompt` function
+- [ ] Add prompt card UI component
+- [ ] Add styles for prompt card
+- [ ] Adjust variable names (`vlogs`, `groupVlogs`, etc.) to match your codebase
+
+---
+
+## Important Notes
+
+1. **Variable Names**: The code references `vlogs` as the array of vlogs. If your codebase uses a different variable name (like `groupVlogs`, `vlogList`, etc.), you'll need to update all references in the provided code.
+
+2. **Data Structure**: The code assumes vlogs have:
+   - `prompt` property (string | null | undefined)
+   - `createdAt` property (string or Date) for timestamp
+
+3. **calculatePostingFrequency**: The implementation provided uses `createdAt` timestamps. If your code uses a different timestamp format or property name, adjust the date comparison logic accordingly.
+
+4. **Error Handling**: The function includes fallback prompts if the API fails or returns invalid responses.
+
+5. **Dependencies**: Make sure `ActivityIndicator` is imported from `react-native` if it's not already.

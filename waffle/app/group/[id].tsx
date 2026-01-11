@@ -9,6 +9,7 @@ import { Platform } from "react-native";
 import { useAuth } from '@/context/AuthContext';
 import { api, Group, Vlog } from '@/services/api';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const API_BASE = "http://localhost:3001"; // TODO: replace with your Mac IP + backend port
 
@@ -22,6 +23,10 @@ export default function GroupFeedScreen() {
   const [selectedVlog, setSelectedVlog] = useState<Vlog | null>(null);
   const [watchUrl, setWatchUrl] = useState<string | null>(null);
   const [isLoadingVideo, setIsLoadingVideo] = useState(false);
+
+  // AI Prompt generation state
+  const [currentPrompt, setCurrentPrompt] = useState<string | null>(null);
+  const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
 
   // Video player for the selected vlog
   const player = useVideoPlayer(watchUrl, (player) => {
@@ -89,6 +94,13 @@ export default function GroupFeedScreen() {
     }
   };
 
+  // Generate prompt when group screen loads and vlogs are available
+  useEffect(() => {
+    if (id && vlogs && !isLoading) {
+      generatePrompt();
+    }
+  }, [vlogs, isLoading]);
+
   // Redirect if no user (e.g., after sign out)
   if (!user) {
     router.replace('/');
@@ -119,10 +131,158 @@ export default function GroupFeedScreen() {
     return date.toLocaleDateString();
   };
 
+  // Calculate posting frequency based on vlog activity
+  const calculatePostingFrequency = (): 'daily' | 'weekly' | 'monthly' | 'occasional' => {
+    if (vlogs.length === 0) return 'occasional';
+
+    // Analyze recent vlog timestamps to determine frequency
+    const recentVlogs = vlogs.slice(0, 10);
+
+    // Count vlogs by recency
+    const todayCount = recentVlogs.filter(vlog => {
+      const createdAt = new Date(vlog.createdAt);
+      const now = new Date();
+      const diffMs = now.getTime() - createdAt.getTime();
+      const diffHours = Math.floor(diffMs / 3600000);
+      return diffHours < 24;
+    }).length;
+
+    const thisWeekCount = recentVlogs.filter(vlog => {
+      const createdAt = new Date(vlog.createdAt);
+      const now = new Date();
+      const diffMs = now.getTime() - createdAt.getTime();
+      const diffDays = Math.floor(diffMs / 86400000);
+      return diffDays < 7;
+    }).length;
+
+    // Determine frequency based on activity patterns
+    if (todayCount >= 2 || (recentVlogs.length >= 5 && todayCount >= 1)) {
+      return 'daily';
+    }
+    if (thisWeekCount >= 2 || recentVlogs.length >= 3) {
+      return 'weekly';
+    }
+    if (recentVlogs.length >= 1) {
+      return 'monthly';
+    }
+    return 'occasional';
+  };
+
+  // Generate AI-powered prompt using Gemini
+  const generatePrompt = async () => {
+    setIsLoadingPrompt(true);
+    try {
+      // Get API key from environment
+      const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error('Gemini API key not found. Add EXPO_PUBLIC_GEMINI_API_KEY to your .env file');
+      }
+
+      // Get previous prompts from existing vlogs to avoid repetition
+      const previousPrompts = vlogs
+        .slice(0, 5)
+        .map(vlog => vlog.prompt)
+        .filter((prompt, index, self) => prompt && self.indexOf(prompt) === index);
+
+      const postingFrequency = calculatePostingFrequency();
+
+      // Build frequency-specific instructions
+      let frequencyInstructions = '';
+      switch (postingFrequency) {
+        case 'daily':
+          frequencyInstructions = 'Since this group posts DAILY, make the prompt about TODAY\'s specific moment, small wins, or quick updates. Keep it light and current.';
+          break;
+        case 'weekly':
+          frequencyInstructions = 'Since this group posts WEEKLY, make the prompt about the WEEK - highlights, something new, or a moment worth sharing from the past few days.';
+          break;
+        case 'monthly':
+          frequencyInstructions = 'Since this group posts MONTHLY, make the prompt about bigger updates - life changes, accomplishments, or meaningful moments from the past month.';
+          break;
+        case 'occasional':
+        default:
+          frequencyInstructions = 'Since this group posts OCCASIONALLY, make the prompt open-ended and flexible - about what\'s new, what matters, or something worth catching up on.';
+      }
+
+      // Build the prompt for Gemini
+      const systemPrompt = `Generate a complete sentence question for a casual vlog prompt. These are casual 1-2 minute video updates.
+
+Posting frequency: ${postingFrequency}
+${frequencyInstructions}
+
+${previousPrompts && previousPrompts.length > 0
+          ? `Previous prompts: ${previousPrompts.join(', ')}\nMake sure your new prompt is different.`
+          : ''
+        }
+
+Generate ONE complete sentence question (8-12 words) that:
+- Is a full question sentence (must have a question mark)
+- Is casual and friendly
+- Is easy to answer in a short video
+- Is different from previous prompts
+
+Examples of good prompts (complete sentences):
+- "What made you laugh this week?"
+- "Who did you hang out with recently?"
+- "What's something you're excited about?"
+
+Return ONLY the complete question sentence, no quotes, no explanations.`;
+
+      // Call Gemini using SDK
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-2.0-flash',
+        generationConfig: {
+          maxOutputTokens: 750,
+          temperature: 0.7,
+        }
+      });
+
+      console.log('[PROMPTS] Calling Gemini API...');
+
+      const result = await model.generateContent(systemPrompt);
+      const response = await result.response;
+      let promptText = response.text().trim();
+
+      // Clean up the prompt (remove quotes if Gemini added them)
+      promptText = promptText.replace(/^["']|["']$/g, '').trim();
+
+      // Validate word count and completeness
+      const wordCount = promptText.split(/\s+/).filter((word: string) => word.length > 0).length;
+      const hasQuestionMark = promptText.includes('?');
+      const isCompleteSentence = wordCount >= 6 && hasQuestionMark && promptText.length > 15;
+
+      console.log(`[PROMPTS] Generated prompt (${wordCount} words, has ?: ${hasQuestionMark}): "${promptText}"`);
+
+      // Handle prompts that are too short, incomplete, or too long
+      let cleanPrompt = promptText;
+      if (!isCompleteSentence) {
+        console.log('[PROMPTS] Prompt is not a complete sentence, using fallback');
+        cleanPrompt = "What made you laugh this week?";
+      } else if (wordCount > 15) {
+        const words = promptText.split(/\s+/).filter((word: string) => word.length > 0);
+        cleanPrompt = words.slice(0, 15).join(' ');
+        if (!cleanPrompt.includes('?')) {
+          cleanPrompt += '?';
+        }
+        console.log(`[PROMPTS] Prompt too long, truncated to 15 words: "${cleanPrompt}"`);
+      }
+
+      console.log('[PROMPTS] Final prompt:', cleanPrompt);
+      setCurrentPrompt(cleanPrompt);
+    } catch (error) {
+      console.error('Error generating prompt:', error);
+      // Fallback prompt if API fails
+      setCurrentPrompt("What's been the highlight of your week?");
+    } finally {
+      setIsLoadingPrompt(false);
+    }
+  };
+
   // ✅ IMPORTANT: inside component so it can access `id`
   async function uploadVlog() {
     try {
       if (!id) throw new Error("Group ID missing (route param `id`)");
+      if (!user) throw new Error("You must be logged in to upload");
 
       console.log("[UPLOAD] start");
 
@@ -339,6 +499,22 @@ export default function GroupFeedScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.feedContent}
         >
+          {/* AI Generated Prompt Card */}
+          <View style={styles.promptCard}>
+            <View style={styles.promptHeader}>
+              <Text style={styles.promptEmoji}>✨</Text>
+              <Text style={styles.promptLabel}>Today's Prompt</Text>
+              {isLoadingPrompt && (
+                <ActivityIndicator size="small" color={WaffleColors.charcoal} style={{ marginLeft: 8 }} />
+              )}
+            </View>
+            {currentPrompt ? (
+              <Text style={styles.promptText}>"{currentPrompt}"</Text>
+            ) : (
+              <Text style={styles.promptTextPlaceholder}>Generating prompt...</Text>
+            )}
+          </View>
+
           {/* Section header */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Vlogs</Text>
@@ -950,6 +1126,42 @@ const styles = StyleSheet.create({
   },
   modalPrompt: {
     fontSize: 14,
+    color: WaffleColors.charcoal,
+    fontStyle: 'italic',
+  },
+  promptCard: {
+    backgroundColor: WaffleColors.yellow,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: WaffleColors.carbonBlack,
+    padding: 20,
+    marginBottom: 24,
+  },
+  promptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  promptEmoji: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  promptLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: WaffleColors.carbonBlack,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  promptText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: WaffleColors.carbonBlack,
+    fontStyle: 'italic',
+    lineHeight: 26,
+  },
+  promptTextPlaceholder: {
+    fontSize: 16,
     color: WaffleColors.charcoal,
     fontStyle: 'italic',
   },
