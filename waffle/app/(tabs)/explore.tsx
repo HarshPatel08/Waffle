@@ -1,5 +1,6 @@
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { WaffleColors } from '@/constants/theme';
 import { currentUser, groups } from '@/constants/mockData';
 import { useAuth } from '@/context/AuthContext';
@@ -13,9 +14,14 @@ export default function ProfileScreen() {
   const totalGroups = groups.length;
   const streak = 12;
 
-  // Redirect if no user (e.g., after sign out)
+  // Redirect to welcome page when user signs out
+  useEffect(() => {
+    if (!user) {
+      router.push('/');
+    }
+  }, [user]);
+
   if (!user) {
-    router.replace('/');
     return null;
   }
 
@@ -118,7 +124,6 @@ export default function ProfileScreen() {
         style={styles.signOutButton}
         onPress={async () => {
           await signOut();
-          router.replace('/');
         }}
       >
         <Text style={styles.signOutText}>Sign Out</Text>

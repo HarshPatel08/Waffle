@@ -1,151 +1,394 @@
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, RefreshControl, ActivityIndicator, Modal, TouchableWithoutFeedback, Alert } from 'react-native';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { WaffleColors } from '@/constants/theme';
-import { groups, vlogs, weeklyRecap } from '@/constants/mockData';
+import { vlogs, weeklyRecap } from '@/constants/mockData';
 import { WaffleBackground } from '@/components/waffle-background';
+import { api } from '@/services/api';
+import { useAuth } from '@/context/AuthContext';
 
 export default function GroupFeedScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
+  const { user: currentUser } = useAuth();
 
-  const group = groups.find((g) => g.id === id) || groups[0];
+  const [group, setGroup] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [membersModalVisible, setMembersModalVisible] = useState(false);
+
+  const [addMemberModalVisible, setAddMemberModalVisible] = useState(false);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+
+  // Filter vlogs for this group (still mock for now)
   const groupVlogs = vlogs.filter((v) => v.groupId === id);
+
+  const fetchGroup = async () => {
+    try {
+      const res = await api.getGroup(id as string);
+      if (res.success && res.group) {
+        setGroup(res.group);
+      }
+    } catch (error) {
+      console.error('Failed to fetch group', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPotentialMembers = async () => {
+    try {
+      const res = await api.getUsers();
+      if (res.success && res.users) {
+        // Filter out existing members
+        const groupMemberIds = group?.members?.map((m: any) => m._id) || [];
+        const potential = res.users.filter((u: any) => !groupMemberIds.includes(u._id));
+        setAllUsers(potential);
+      }
+    } catch (error) {
+      console.error('Failed to fetch users', error);
+    }
+  };
+
+  const openAddMemberModal = () => {
+    setSelectedUserIds([]);
+    fetchPotentialMembers();
+    setAddMemberModalVisible(true);
+  };
+
+  const toggleUserSelection = (userId: string) => {
+    if (selectedUserIds.includes(userId)) {
+      setSelectedUserIds(selectedUserIds.filter(id => id !== userId));
+    } else {
+      setSelectedUserIds([...selectedUserIds, userId]);
+    }
+  };
+
+  const handleAddMembers = async () => {
+    if (selectedUserIds.length === 0) return;
+
+    try {
+      const res = await api.createInvitation(
+        currentUser!.id,
+        group.name,
+        selectedUserIds,
+        group._id
+      );
+
+      if (res.success) {
+        Alert.alert('Success', 'Invitations sent!');
+        setAddMemberModalVisible(false);
+      } else {
+        Alert.alert('Error', 'Failed to send invitations');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Network error');
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchGroup();
+    }, [id])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchGroup();
+    setRefreshing(false);
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={WaffleColors.carbonBlack} />
+      </View>
+    );
+  }
+
+  if (!group) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text>Group not found</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backText}>← Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <>
       <WaffleBackground />
       <View style={styles.container}>
         {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.menuButton}>
-          <Text style={styles.menuText}>···</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Group info */}
-      <View style={styles.groupInfo}>
-        <View style={styles.groupEmojiLarge}>
-          <Text style={styles.groupEmojiText}>{group.emoji}</Text>
-        </View>
-        <Text style={styles.groupName}>{group.name}</Text>
-        <Text style={styles.groupMeta}>{group.memberCount} members</Text>
-
-        {/* Member row */}
-        <View style={styles.membersRow}>
-          {group.members.map((member, index) => (
-            <View key={member.id} style={[styles.memberAvatar, { marginLeft: index > 0 ? -12 : 0 }]}>
-              <Text style={styles.memberEmoji}>{member.emoji}</Text>
-            </View>
-          ))}
-          <TouchableOpacity style={styles.addMemberButton}>
-            <Text style={styles.addMemberText}>+</Text>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
+            <Text style={styles.menuText}>···</Text>
           </TouchableOpacity>
         </View>
-      </View>
 
-      <ScrollView
-        style={styles.feedContainer}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.feedContent}
-      >
-        {/* Weekly recap card */}
-        {id === '1' && (
-          <TouchableOpacity style={styles.recapCard} activeOpacity={0.9}>
-            <View style={styles.recapHeader}>
-              <Text style={styles.recapEmoji}>✨</Text>
-              <View style={styles.recapTitleContainer}>
-                <Text style={styles.recapTitle}>Weekly Recap</Text>
-                <Text style={styles.recapDate}>{weeklyRecap.generatedAt}</Text>
-              </View>
-              <View style={styles.recapBadge}>
-                <Text style={styles.recapBadgeText}>AI</Text>
+        {/* Dropdown Menu Modal */}
+        <Modal
+          transparent={true}
+          visible={menuVisible}
+          animationType="fade"
+          onRequestClose={() => setMenuVisible(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setMenuVisible(false)}>
+            <View style={styles.modalOverlay}>
+              <View style={styles.menuContainer}>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    setMenuVisible(false);
+                    setMembersModalVisible(true);
+                  }}
+                >
+                  <Text style={styles.menuItemText}>👥 Members</Text>
+                </TouchableOpacity>
+                <View style={styles.menuSeparator} />
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => setMenuVisible(false)}
+                >
+                  <Text style={styles.menuItemText}>⚙️ Settings</Text>
+                </TouchableOpacity>
               </View>
             </View>
-            <Text style={styles.recapSummary} numberOfLines={3}>
-              {weeklyRecap.summary}
-            </Text>
-            <View style={styles.recapHighlights}>
-              {weeklyRecap.highlights.slice(0, 2).map((highlight, index) => (
-                <View key={index} style={styles.highlightItem}>
-                  <Text style={styles.highlightBullet}>•</Text>
-                  <Text style={styles.highlightText}>{highlight}</Text>
-                </View>
-              ))}
+          </TouchableWithoutFeedback>
+        </Modal>
+
+        {/* Members List Modal */}
+        <Modal
+          transparent={true}
+          visible={membersModalVisible}
+          animationType="slide"
+          onRequestClose={() => setMembersModalVisible(false)}
+        >
+          <View style={styles.modalCenterOverlay}>
+            <View style={styles.membersModalContainer}>
+              <View style={styles.membersModalHeader}>
+                <Text style={styles.membersModalTitle}>Members ({group.members?.length || 0})</Text>
+                <TouchableOpacity onPress={() => setMembersModalVisible(false)}>
+                  <Text style={styles.membersModalClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.membersList} contentContainerStyle={{ paddingBottom: 20 }}>
+                {group.members?.map((member: any) => (
+                  <View key={member._id} style={styles.membersListItem}>
+                    <View style={styles.memberAvatar}>
+                      <Text style={styles.memberEmoji}>{member.emoji || '👤'}</Text>
+                    </View>
+                    <View style={{ marginLeft: 12 }}>
+                      <Text style={styles.memberName}>{member.name}</Text>
+                      <Text style={styles.memberEmail}>{member.email}</Text>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
             </View>
-            <Text style={styles.recapAction}>Listen to full recap →</Text>
-            {/* Scribble decoration */}
-            <Text style={styles.recapScribble}>{"~magic~"}</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Section header */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Vlogs</Text>
-          <Text style={styles.sectionSubtitle}>from your friends</Text>
-        </View>
-
-        {/* Vlog feed */}
-        {groupVlogs.length > 0 ? (
-          groupVlogs.map((vlog) => (
-            <TouchableOpacity key={vlog.id} style={styles.vlogCard} activeOpacity={0.9}>
-              {/* Video thumbnail */}
-              <View style={styles.vlogThumbnail}>
-                <View style={styles.vlogPlayButton}>
-                  <Text style={styles.vlogPlayIcon}>▶</Text>
-                </View>
-                <View style={styles.vlogDuration}>
-                  <Text style={styles.vlogDurationText}>{vlog.duration}</Text>
-                </View>
-                {!vlog.hasViewed && <View style={styles.vlogUnwatchedDot} />}
-                {/* Scribble border effect */}
-                <View style={styles.vlogThumbnailBorder} />
-              </View>
-
-              {/* Vlog info */}
-              <View style={styles.vlogInfo}>
-                <View style={styles.vlogUserRow}>
-                  <View style={styles.vlogUserAvatar}>
-                    <Text style={styles.vlogUserEmoji}>{vlog.userEmoji}</Text>
-                  </View>
-                  <View style={styles.vlogUserInfo}>
-                    <Text style={styles.vlogUserName}>{vlog.userName}</Text>
-                    <Text style={styles.vlogTimestamp}>{vlog.timestamp}</Text>
-                  </View>
-                </View>
-                <Text style={styles.vlogPrompt}>"{vlog.prompt}"</Text>
-
-                {/* Actions */}
-                <View style={styles.vlogActions}>
-                  <TouchableOpacity style={styles.vlogActionButton}>
-                    <Text style={styles.vlogActionText}>💬 Reply</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.vlogActionButton}>
-                    <Text style={styles.vlogActionText}>❤️</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>📭</Text>
-            <Text style={styles.emptyTitle}>No vlogs yet</Text>
-            <Text style={styles.emptySubtitle}>Be the first to share!</Text>
           </View>
-        )}
+        </Modal>
 
-        {/* Spacer */}
-        <View style={{ height: 100 }} />
-      </ScrollView>
 
-      {/* Record FAB */}
-      <TouchableOpacity style={styles.recordFab} activeOpacity={0.9}>
-        <Text style={styles.recordFabIcon}>🎬</Text>
-        <Text style={styles.recordFabText}>Record</Text>
-      </TouchableOpacity>
+        {/* Add Member Modal */}
+        <Modal
+          transparent={true}
+          visible={addMemberModalVisible}
+          animationType="slide"
+          onRequestClose={() => setAddMemberModalVisible(false)}
+        >
+          <View style={styles.modalCenterOverlay}>
+            <View style={styles.membersModalContainer}>
+              <View style={styles.membersModalHeader}>
+                <Text style={styles.membersModalTitle}>Add Members</Text>
+                <TouchableOpacity onPress={() => setAddMemberModalVisible(false)}>
+                  <Text style={styles.membersModalClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.modalSubtitle}>Select friends to invite to {group.name}</Text>
+
+              <ScrollView style={styles.membersList} contentContainerStyle={{ paddingBottom: 20 }}>
+                {allUsers.length > 0 ? (
+                  allUsers.map((user: any) => {
+                    const isSelected = selectedUserIds.includes(user._id);
+                    return (
+                      <TouchableOpacity
+                        key={user._id}
+                        style={[styles.userSelectRow, isSelected && styles.userSelectRowActive]}
+                        onPress={() => toggleUserSelection(user._id)}
+                      >
+                        <View style={styles.userSelectInfo}>
+                          <View style={styles.memberAvatar}>
+                            <Text style={styles.memberEmoji}>{user.emoji || '👤'}</Text>
+                          </View>
+                          <Text style={styles.memberName}>{user.name}</Text>
+                        </View>
+                        <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
+                          {isSelected && <Text style={styles.checkboxCheck}>✓</Text>}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })
+                ) : (
+                  <View style={styles.emptyStateSmall}>
+                    <Text style={styles.emptyStateText}>No new users found to invite.</Text>
+                  </View>
+                )}
+              </ScrollView>
+
+              <TouchableOpacity
+                style={[
+                  styles.proceedButton,
+                  selectedUserIds.length === 0 && styles.proceedButtonDisabled
+                ]}
+                onPress={handleAddMembers}
+                disabled={selectedUserIds.length === 0}
+              >
+                <Text style={styles.proceedButtonText}>
+                  Invite {selectedUserIds.length > 0 ? `(${selectedUserIds.length})` : ''}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Group info */}
+        <View style={styles.groupInfo}>
+          <View style={styles.groupEmojiLarge}>
+            <Text style={styles.groupEmojiText}>{group.emoji || '🏠'}</Text>
+          </View>
+          <Text style={styles.groupName}>{group.name}</Text>
+          <Text style={styles.groupMeta}>{group.members?.length || 0} members</Text>
+
+          {/* Member row */}
+          <View style={styles.membersRow}>
+            {group.members?.slice(0, 5).map((member: any, index: number) => (
+              <View key={member._id} style={[styles.memberAvatar, { marginLeft: index > 0 ? -12 : 0 }]}>
+                <Text style={styles.memberEmoji}>{member.emoji || '👤'}</Text>
+              </View>
+            ))}
+            {group.members?.length > 5 && (
+              <View style={[styles.memberAvatar, styles.memberAvatarMore, { marginLeft: -12 }]}>
+                <Text style={styles.memberMoreText}>+{group.members.length - 5}</Text>
+              </View>
+            )}
+            <TouchableOpacity style={styles.addMemberButton} onPress={openAddMemberModal}>
+              <Text style={styles.addMemberText}>+</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <ScrollView
+          style={styles.feedContainer}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.feedContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          {/* Weekly recap card */}
+          {id === '1' && (
+            <TouchableOpacity style={styles.recapCard} activeOpacity={0.9}>
+              <View style={styles.recapHeader}>
+                <Text style={styles.recapEmoji}>✨</Text>
+                <View style={styles.recapTitleContainer}>
+                  <Text style={styles.recapTitle}>Weekly Recap</Text>
+                  <Text style={styles.recapDate}>{weeklyRecap.generatedAt}</Text>
+                </View>
+                <View style={styles.recapBadge}>
+                  <Text style={styles.recapBadgeText}>AI</Text>
+                </View>
+              </View>
+              <Text style={styles.recapSummary} numberOfLines={3}>
+                {weeklyRecap.summary}
+              </Text>
+              <View style={styles.recapHighlights}>
+                {weeklyRecap.highlights.slice(0, 2).map((highlight, index) => (
+                  <View key={index} style={styles.highlightItem}>
+                    <Text style={styles.highlightBullet}>•</Text>
+                    <Text style={styles.highlightText}>{highlight}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.recapAction}>Listen to full recap →</Text>
+              {/* Scribble decoration */}
+              <Text style={styles.recapScribble}>{"~magic~"}</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Section header */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Vlogs</Text>
+            <Text style={styles.sectionSubtitle}>from your friends</Text>
+          </View>
+
+          {/* Vlog feed */}
+          {groupVlogs.length > 0 ? (
+            groupVlogs.map((vlog) => (
+              <TouchableOpacity key={vlog.id} style={styles.vlogCard} activeOpacity={0.9}>
+                {/* Video thumbnail */}
+                <View style={styles.vlogThumbnail}>
+                  <View style={styles.vlogPlayButton}>
+                    <Text style={styles.vlogPlayIcon}>▶</Text>
+                  </View>
+                  <View style={styles.vlogDuration}>
+                    <Text style={styles.vlogDurationText}>{vlog.duration}</Text>
+                  </View>
+                  {!vlog.hasViewed && <View style={styles.vlogUnwatchedDot} />}
+                  {/* Scribble border effect */}
+                  <View style={styles.vlogThumbnailBorder} />
+                </View>
+
+                {/* Vlog info */}
+                <View style={styles.vlogInfo}>
+                  <View style={styles.vlogUserRow}>
+                    <View style={styles.vlogUserAvatar}>
+                      <Text style={styles.vlogUserEmoji}>{vlog.userEmoji}</Text>
+                    </View>
+                    <View style={styles.vlogUserInfo}>
+                      <Text style={styles.vlogUserName}>{vlog.userName}</Text>
+                      <Text style={styles.vlogTimestamp}>{vlog.timestamp}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.vlogPrompt}>"{vlog.prompt}"</Text>
+
+                  {/* Actions */}
+                  <View style={styles.vlogActions}>
+                    <TouchableOpacity style={styles.vlogActionButton}>
+                      <Text style={styles.vlogActionText}>💬 Reply</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.vlogActionButton}>
+                      <Text style={styles.vlogActionText}>❤️</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyEmoji}>📭</Text>
+              <Text style={styles.emptyTitle}>No vlogs yet</Text>
+              <Text style={styles.emptySubtitle}>Be the first to share!</Text>
+            </View>
+          )}
+
+          {/* Spacer */}
+          <View style={{ height: 100 }} />
+        </ScrollView>
+
+        {/* Record FAB */}
+        <TouchableOpacity style={styles.recordFab} activeOpacity={0.9}>
+          <Text style={styles.recordFabIcon}>🎬</Text>
+          <Text style={styles.recordFabText}>Record</Text>
+        </TouchableOpacity>
       </View>
     </>
   );
@@ -249,6 +492,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: WaffleColors.charcoal,
+  },
+  memberAvatarMore: {
+    backgroundColor: WaffleColors.charcoal,
+    zIndex: 10,
+  },
+  memberMoreText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: WaffleColors.white,
   },
   feedContainer: {
     flex: 1,
@@ -516,6 +768,172 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   recordFabText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: WaffleColors.carbonBlack,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: 80,
+    paddingRight: 24,
+  },
+  modalCenterOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  menuContainer: {
+    backgroundColor: WaffleColors.white,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: WaffleColors.carbonBlack,
+    width: 200,
+    paddingVertical: 8,
+    shadowColor: WaffleColors.carbonBlack,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+  },
+  menuItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  menuItemText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WaffleColors.carbonBlack,
+  },
+  menuSeparator: {
+    height: 1,
+    backgroundColor: WaffleColors.dustGrey,
+    marginVertical: 4,
+  },
+  membersModalContainer: {
+    backgroundColor: WaffleColors.parchment,
+    width: '100%',
+    maxHeight: '70%',
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: WaffleColors.carbonBlack,
+    padding: 20,
+    shadowColor: WaffleColors.carbonBlack,
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+  },
+  membersModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: WaffleColors.charcoal,
+  },
+  membersModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: WaffleColors.carbonBlack,
+  },
+  membersModalClose: {
+    fontSize: 24,
+    color: WaffleColors.charcoal,
+    fontWeight: '700',
+  },
+  membersList: {
+    width: '100%',
+  },
+  membersListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  memberName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: WaffleColors.carbonBlack,
+  },
+  memberEmail: {
+    fontSize: 12,
+    color: WaffleColors.charcoal,
+    marginTop: 2,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: WaffleColors.charcoal,
+    marginBottom: 16,
+  },
+  userSelectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  userSelectRowActive: {
+    backgroundColor: 'rgba(255, 199, 0, 0.1)', // Light yellow
+    borderColor: WaffleColors.yellow,
+  },
+  userSelectInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: WaffleColors.dustGrey,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxActive: {
+    backgroundColor: WaffleColors.yellow,
+    borderColor: WaffleColors.carbonBlack,
+  },
+  checkboxCheck: {
+    fontSize: 14,
+    color: WaffleColors.carbonBlack,
+    fontWeight: '700',
+  },
+  emptyStateSmall: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    color: WaffleColors.charcoal,
+    fontStyle: 'italic',
+  },
+  proceedButton: {
+    backgroundColor: WaffleColors.yellow,
+    borderRadius: 100,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 16,
+    borderWidth: 2,
+    borderColor: WaffleColors.carbonBlack,
+    shadowColor: WaffleColors.carbonBlack,
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+  },
+  proceedButtonDisabled: {
+    backgroundColor: WaffleColors.dustGrey,
+    borderColor: WaffleColors.charcoal,
+    shadowOpacity: 0,
+  },
+  proceedButtonText: {
     fontSize: 16,
     fontWeight: '700',
     color: WaffleColors.carbonBlack,

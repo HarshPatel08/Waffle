@@ -1,13 +1,40 @@
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { WaffleColors } from '@/constants/theme';
-import { groups } from '@/constants/mockData';
 import { useAuth } from '@/context/AuthContext';
+import { api } from '@/services/api';
 import { WaffleBackground } from '@/components/waffle-background';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
+  const [groups, setGroups] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchGroups = async () => {
+    if (!user) return;
+    try {
+      const res = await api.getUserGroups(user.id);
+      if (res.success && res.groups) {
+        setGroups(res.groups);
+      }
+    } catch (error) {
+      console.error('Failed to fetch groups', error);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchGroups();
+    }, [user])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchGroups();
+    setRefreshing(false);
+  };
 
   // Redirect if no user (e.g., after sign out)
   if (!user) {
@@ -20,92 +47,112 @@ export default function HomeScreen() {
       <WaffleBackground />
       <View style={styles.container}>
         {/* Header with profile */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.greeting}>Hey, {user.name.split(' ')[0]}!</Text>
-          <Text style={styles.subGreeting}>Ready to share today?</Text>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.greeting}>Hey, {user.name.split(' ')[0]}!</Text>
+            <Text style={styles.subGreeting}>Ready to share today?</Text>
+          </View>
+          <TouchableOpacity style={styles.avatarContainer}>
+            <Text style={styles.avatarEmoji}>{user.emoji}</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.avatarContainer}>
-          <Text style={styles.avatarEmoji}>{user.emoji}</Text>
-        </TouchableOpacity>
-      </View>
 
-      {/* Record prompt card */}
-      <TouchableOpacity style={styles.recordCard} activeOpacity={0.9}>
-        <View style={styles.recordContent}>
-          <Text style={styles.recordEmoji}>🎬</Text>
-          <View style={styles.recordTextContainer}>
-            <Text style={styles.recordTitle}>Today's prompt</Text>
-            <Text style={styles.recordPrompt}>"What made you smile today?"</Text>
+        {/* Record prompt card */}
+        <TouchableOpacity style={styles.recordCard} activeOpacity={0.9}>
+          <View style={styles.recordContent}>
+            <Text style={styles.recordEmoji}>🎬</Text>
+            <View style={styles.recordTextContainer}>
+              <Text style={styles.recordTitle}>Today's prompt</Text>
+              <Text style={styles.recordPrompt}>"What made you smile today?"</Text>
+            </View>
+          </View>
+          <View style={styles.recordButton}>
+            <Text style={styles.recordButtonText}>Record</Text>
+          </View>
+          {/* Scribble decoration */}
+          <Text style={styles.recordScribble}>{"~tap~"}</Text>
+        </TouchableOpacity>
+
+        {/* Groups section */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, paddingHorizontal: 24 }}>
+          <Text style={styles.sectionTitle}>Your Groups</Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              style={{ backgroundColor: WaffleColors.parchment, padding: 8, borderRadius: 8, borderWidth: 1, borderColor: WaffleColors.carbonBlack }}
+              onPress={() => router.push('/requests')}
+            >
+              <Text style={{ fontWeight: 'bold', color: WaffleColors.carbonBlack }}>✉️ Requests</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ backgroundColor: WaffleColors.yellow, padding: 8, borderRadius: 8, borderWidth: 1, borderColor: WaffleColors.carbonBlack }}
+              onPress={() => router.push('/group/new')}
+            >
+              <Text style={{ fontWeight: 'bold', color: WaffleColors.carbonBlack }}>+ New</Text>
+            </TouchableOpacity>
           </View>
         </View>
-        <View style={styles.recordButton}>
-          <Text style={styles.recordButtonText}>Record</Text>
+
+        <ScrollView
+          style={styles.groupsList}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.groupsListContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          {groups.length === 0 ? (
+            <Text style={{ textAlign: 'center', marginTop: 40, color: WaffleColors.charcoal }}>
+              You don't have any groups yet. Create one!
+            </Text>
+          ) : (
+            groups.map((group) => (
+              <TouchableOpacity
+                key={group._id}
+                style={styles.groupCard}
+                activeOpacity={0.8}
+                onPress={() => router.push(`/group/${group._id}`)}
+              >
+                <View style={styles.groupEmoji}>
+                  <Text style={styles.groupEmojiText}>🏠</Text>
+                </View>
+                <View style={styles.groupInfo}>
+                  <View style={styles.groupNameRow}>
+                    <Text style={styles.groupName}>{group.name}</Text>
+                    {/* Mock unread count for now */}
+                    {false && (
+                      <View style={styles.unreadBadge}>
+                        <Text style={styles.unreadText}>1</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.groupMeta}>
+                    {group.members.length} members
+                  </Text>
+                  <View style={styles.memberAvatars}>
+                    {group.members.slice(0, 3).map((member: any, index: number) => (
+                      <View
+                        key={member._id}
+                        style={[styles.memberAvatar, { marginLeft: index > 0 ? -8 : 0 }]}
+                      >
+                        <Text style={styles.memberAvatarEmoji}>{member.emoji}</Text>
+                      </View>
+                    ))}
+                    {group.members.length > 3 && (
+                      <View style={[styles.memberAvatar, styles.memberAvatarMore, { marginLeft: -8 }]}>
+                        <Text style={styles.memberMoreText}>+{group.members.length - 3}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                <Text style={styles.groupArrow}>→</Text>
+              </TouchableOpacity>
+            )))}
+        </ScrollView>
+
+        {/* Floating scribble decoration */}
+        <View style={styles.floatingScribble}>
+          <Text style={styles.floatingScribbleText}>{"* * *"}</Text>
         </View>
-        {/* Scribble decoration */}
-        <Text style={styles.recordScribble}>{"~tap~"}</Text>
-      </TouchableOpacity>
-
-      {/* Groups section */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Your Groups</Text>
-        <TouchableOpacity>
-          <Text style={styles.sectionAction}>+ New</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        style={styles.groupsList}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.groupsListContent}
-      >
-        {groups.map((group) => (
-          <TouchableOpacity
-            key={group.id}
-            style={styles.groupCard}
-            activeOpacity={0.8}
-            onPress={() => router.push(`/group/${group.id}`)}
-          >
-            <View style={styles.groupEmoji}>
-              <Text style={styles.groupEmojiText}>{group.emoji}</Text>
-            </View>
-            <View style={styles.groupInfo}>
-              <View style={styles.groupNameRow}>
-                <Text style={styles.groupName}>{group.name}</Text>
-                {group.unreadCount > 0 && (
-                  <View style={styles.unreadBadge}>
-                    <Text style={styles.unreadText}>{group.unreadCount}</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={styles.groupMeta}>
-                {group.memberCount} members · {group.lastActivity}
-              </Text>
-              <View style={styles.memberAvatars}>
-                {group.members.slice(0, 3).map((member, index) => (
-                  <View
-                    key={member.id}
-                    style={[styles.memberAvatar, { marginLeft: index > 0 ? -8 : 0 }]}
-                  >
-                    <Text style={styles.memberAvatarEmoji}>{member.emoji}</Text>
-                  </View>
-                ))}
-                {group.memberCount > 3 && (
-                  <View style={[styles.memberAvatar, styles.memberAvatarMore, { marginLeft: -8 }]}>
-                    <Text style={styles.memberMoreText}>+{group.memberCount - 3}</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-            <Text style={styles.groupArrow}>→</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* Floating scribble decoration */}
-      <View style={styles.floatingScribble}>
-        <Text style={styles.floatingScribbleText}>{"* * *"}</Text>
-      </View>
       </View>
     </>
   );

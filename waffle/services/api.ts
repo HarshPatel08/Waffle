@@ -4,6 +4,7 @@ interface ApiResponse<T> {
   success: boolean;
   message: string;
   user?: T;
+  [key: string]: any; // Allow other dynamic fields like 'invitations'
 }
 
 interface User {
@@ -93,7 +94,37 @@ class ApiService {
     const response = await fetch(`${this.baseUrl}/api/health`);
     return response.json();
   }
+  async getPendingInvitations(userId: string): Promise<ApiResponse<any[]>> {
+    return this.request<any[]>(`/api/invitations/pending/${userId}`);
+  }
+
+  async respondToInvitation(invitationId: string, userId: string, response: 'accepted' | 'declined'): Promise<ApiResponse<any>> {
+    return this.request<any>('/api/invitations/respond', {
+      method: 'POST',
+      body: JSON.stringify({ invitationId, userId, response }),
+    });
+  }
+
+  async createInvitation(senderId: string, groupName: string, invitedUserIds: string[], groupId?: string): Promise<ApiResponse<any>> {
+    return this.request<any>('/api/invitations/create', {
+      method: 'POST',
+      body: JSON.stringify({ senderId, groupName, invitedUserIds, groupId }),
+    });
+  }
+
+  async getUsers(): Promise<ApiResponse<User[]>> {
+    return this.request<User[]>('/api/users');
+  }
+
+  async getUserGroups(userId: string): Promise<ApiResponse<any[]>> {
+    return this.request<any[]>(`/api/groups/user/${userId}`);
+  }
+
+  async getGroup(groupId: string): Promise<ApiResponse<any>> {
+    return this.request<any>(`/api/groups/${groupId}`);
+  }
 }
+
 
 export const api = new ApiService();
 export type { User, SignUpData, SignInData, ApiResponse };
