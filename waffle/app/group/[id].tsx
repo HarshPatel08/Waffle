@@ -1,8 +1,15 @@
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { WaffleColors } from '@/constants/theme';
-import { groups, vlogs, weeklyRecap } from '@/constants/mockData';
-import { WaffleBackground } from '@/components/waffle-background';
+import React from "react";
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert } from "react-native";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { WaffleColors } from "@/constants/theme";
+import { groups, vlogs, weeklyRecap } from "@/constants/mockData";
+import { WaffleBackground } from "@/components/waffle-background";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
+import { Platform } from "react-native";
+
+const API_BASE = "http://localhost:3001"; // TODO: replace with your Mac IP + backend port
+const userId = "USER_ID"; // TODO: replace with real user id
 
 export default function GroupFeedScreen() {
   const router = useRouter();
@@ -11,145 +18,278 @@ export default function GroupFeedScreen() {
   const group = groups.find((g) => g.id === id) || groups[0];
   const groupVlogs = vlogs.filter((v) => v.groupId === id);
 
+  // ✅ IMPORTANT: inside component so it can access `id`
+  async function uploadVlog() {
+    try {
+      if (!id) throw new Error("Group ID missing (route param `id`)");
+
+      console.log("[UPLOAD] start");
+
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: "video/*",
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (picked.canceled) {
+        console.log("[UPLOAD] canceled");
+        return;
+      }
+
+      const asset = picked.assets?.[0];
+      if (!asset?.uri) throw new Error("No video selected");
+
+      const groupId = String(id);
+
+      // Detect MIME type (MOV support)
+      const uriLower = asset.uri.toLowerCase();
+      let contentType = asset.mimeType;
+      if (!contentType) {
+        if (uriLower.endsWith(".mov")) contentType = "video/quicktime";
+        else if (uriLower.endsWith(".mp4")) contentType = "video/mp4";
+        else contentType = "video/mp4";
+      }
+
+      console.log("[UPLOAD] picked", { uri: asset.uri, mime: asset.mimeType, contentType, groupId });
+
+      // 1) signed URL
+      console.log("[UPLOAD] requesting signed url...");
+      console.log(API_BASE);
+      const signedRes = await fetch(`${API_BASE}/api/vlogs/upload-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, groupId, contentType }),
+      });
+
+      const signedText = await signedRes.text();
+      console.log("[UPLOAD] upload-url status", signedRes.status, signedText);
+
+      let signedJson: any;
+      try {
+        signedJson = JSON.parse(signedText);
+      } catch {
+        throw new Error(`upload-url returned non-JSON (status ${signedRes.status})`);
+      }
+
+      if (!signedRes.ok || !signedJson.success) {
+        throw new Error(signedJson.message || "Failed to get upload URL");
+      }
+
+      const { uploadUrl, publicUrl, gcsPath } = signedJson;
+      console.log("[UPLOAD] got signed url", { gcsPath, publicUrl });
+
+      // 2) PUT to GCS
+      console.log("[UPLOAD] uploading to GCS...");
+
+      if (Platform.OS === "web") {
+        // Web: asset.uri is blob:http://... so fetch it as a Blob then PUT it
+        const blobRes = await fetch(asset.uri);
+        const blob = await blobRes.blob();
+
+        const putRes = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": contentType,
+          },
+          body: blob,
+        });
+
+        console.log("[UPLOAD] PUT(web) status", putRes.status);
+
+        if (!putRes.ok) {
+          const errText = await putRes.text().catch(() => "");
+          throw new Error(`GCS upload failed (web) status ${putRes.status} ${errText}`);
+        }
+      } else {
+        // Native: use expo-file-system
+        const putResult = await FileSystem.uploadAsync(uploadUrl, asset.uri, {
+          httpMethod: "PUT",
+          uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+          headers: { "Content-Type": contentType },
+        });
+
+        console.log("[UPLOAD] PUT(native) result", {
+          status: putResult.status,
+          body: putResult.body?.slice?.(0, 200),
+        });
+
+        if (putResult.status < 200 || putResult.status >= 300) {
+          throw new Error(`GCS upload failed (native) status ${putResult.status}`);
+        }
+      }
+
+
+      // 3) Create DB record
+      console.log("[UPLOAD] creating vlog record...");
+      const createRes = await fetch(`${API_BASE}/api/vlogs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          groupId,
+          gcsPath,
+          publicUrl,
+          duration: 0,
+          prompt: "",
+        }),
+      });
+
+      const createText = await createRes.text();
+      console.log("[UPLOAD] create status", createRes.status, createText);
+
+      let createJson: any;
+      try {
+        createJson = JSON.parse(createText);
+      } catch {
+        throw new Error(`create vlog returned non-JSON (status ${createRes.status})`);
+      }
+
+      if (!createRes.ok || !createJson.success) {
+        throw new Error(createJson.message || "Failed to save vlog");
+      }
+
+      console.log("[UPLOAD] DONE ✅", createJson);
+      Alert.alert("Uploaded!", "Vlog uploaded and saved.");
+    } catch (e: any) {
+      console.log("[UPLOAD] ERROR ❌", e);
+      Alert.alert("Upload failed", e?.message ?? "Unknown error");
+    }
+  }
+
   return (
     <>
       <WaffleBackground />
       <View style={styles.container}>
         {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.menuButton}>
-          <Text style={styles.menuText}>···</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Group info */}
-      <View style={styles.groupInfo}>
-        <View style={styles.groupEmojiLarge}>
-          <Text style={styles.groupEmojiText}>{group.emoji}</Text>
-        </View>
-        <Text style={styles.groupName}>{group.name}</Text>
-        <Text style={styles.groupMeta}>{group.memberCount} members</Text>
-
-        {/* Member row */}
-        <View style={styles.membersRow}>
-          {group.members.map((member, index) => (
-            <View key={member.id} style={[styles.memberAvatar, { marginLeft: index > 0 ? -12 : 0 }]}>
-              <Text style={styles.memberEmoji}>{member.emoji}</Text>
-            </View>
-          ))}
-          <TouchableOpacity style={styles.addMemberButton}>
-            <Text style={styles.addMemberText}>+</Text>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.menuButton}>
+            <Text style={styles.menuText}>···</Text>
           </TouchableOpacity>
         </View>
-      </View>
 
-      <ScrollView
-        style={styles.feedContainer}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.feedContent}
-      >
-        {/* Weekly recap card */}
-        {id === '1' && (
-          <TouchableOpacity style={styles.recapCard} activeOpacity={0.9}>
-            <View style={styles.recapHeader}>
-              <Text style={styles.recapEmoji}>✨</Text>
-              <View style={styles.recapTitleContainer}>
-                <Text style={styles.recapTitle}>Weekly Recap</Text>
-                <Text style={styles.recapDate}>{weeklyRecap.generatedAt}</Text>
-              </View>
-              <View style={styles.recapBadge}>
-                <Text style={styles.recapBadgeText}>AI</Text>
-              </View>
-            </View>
-            <Text style={styles.recapSummary} numberOfLines={3}>
-              {weeklyRecap.summary}
-            </Text>
-            <View style={styles.recapHighlights}>
-              {weeklyRecap.highlights.slice(0, 2).map((highlight, index) => (
-                <View key={index} style={styles.highlightItem}>
-                  <Text style={styles.highlightBullet}>•</Text>
-                  <Text style={styles.highlightText}>{highlight}</Text>
-                </View>
-              ))}
-            </View>
-            <Text style={styles.recapAction}>Listen to full recap →</Text>
-            {/* Scribble decoration */}
-            <Text style={styles.recapScribble}>{"~magic~"}</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Section header */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Vlogs</Text>
-          <Text style={styles.sectionSubtitle}>from your friends</Text>
-        </View>
-
-        {/* Vlog feed */}
-        {groupVlogs.length > 0 ? (
-          groupVlogs.map((vlog) => (
-            <TouchableOpacity key={vlog.id} style={styles.vlogCard} activeOpacity={0.9}>
-              {/* Video thumbnail */}
-              <View style={styles.vlogThumbnail}>
-                <View style={styles.vlogPlayButton}>
-                  <Text style={styles.vlogPlayIcon}>▶</Text>
-                </View>
-                <View style={styles.vlogDuration}>
-                  <Text style={styles.vlogDurationText}>{vlog.duration}</Text>
-                </View>
-                {!vlog.hasViewed && <View style={styles.vlogUnwatchedDot} />}
-                {/* Scribble border effect */}
-                <View style={styles.vlogThumbnailBorder} />
-              </View>
-
-              {/* Vlog info */}
-              <View style={styles.vlogInfo}>
-                <View style={styles.vlogUserRow}>
-                  <View style={styles.vlogUserAvatar}>
-                    <Text style={styles.vlogUserEmoji}>{vlog.userEmoji}</Text>
-                  </View>
-                  <View style={styles.vlogUserInfo}>
-                    <Text style={styles.vlogUserName}>{vlog.userName}</Text>
-                    <Text style={styles.vlogTimestamp}>{vlog.timestamp}</Text>
-                  </View>
-                </View>
-                <Text style={styles.vlogPrompt}>"{vlog.prompt}"</Text>
-
-                {/* Actions */}
-                <View style={styles.vlogActions}>
-                  <TouchableOpacity style={styles.vlogActionButton}>
-                    <Text style={styles.vlogActionText}>💬 Reply</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.vlogActionButton}>
-                    <Text style={styles.vlogActionText}>❤️</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>📭</Text>
-            <Text style={styles.emptyTitle}>No vlogs yet</Text>
-            <Text style={styles.emptySubtitle}>Be the first to share!</Text>
+        {/* Group info */}
+        <View style={styles.groupInfo}>
+          <View style={styles.groupEmojiLarge}>
+            <Text style={styles.groupEmojiText}>{group.emoji}</Text>
           </View>
-        )}
+          <Text style={styles.groupName}>{group.name}</Text>
+          <Text style={styles.groupMeta}>{group.memberCount} members</Text>
 
-        {/* Spacer */}
-        <View style={{ height: 100 }} />
-      </ScrollView>
+          {/* Member row */}
+          <View style={styles.membersRow}>
+            {group.members.map((member, index) => (
+              <View key={member.id} style={[styles.memberAvatar, { marginLeft: index > 0 ? -12 : 0 }]}>
+                <Text style={styles.memberEmoji}>{member.emoji}</Text>
+              </View>
+            ))}
+            <TouchableOpacity style={styles.addMemberButton}>
+              <Text style={styles.addMemberText}>+</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
-      {/* Record FAB */}
-      <TouchableOpacity style={styles.recordFab} activeOpacity={0.9}>
-        <Text style={styles.recordFabIcon}>🎬</Text>
-        <Text style={styles.recordFabText}>Record</Text>
-      </TouchableOpacity>
+        <ScrollView
+          style={styles.feedContainer}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.feedContent}
+        >
+          {/* Weekly recap card */}
+          {id === "1" && (
+            <TouchableOpacity style={styles.recapCard} activeOpacity={0.9}>
+              <View style={styles.recapHeader}>
+                <Text style={styles.recapEmoji}>✨</Text>
+                <View style={styles.recapTitleContainer}>
+                  <Text style={styles.recapTitle}>Weekly Recap</Text>
+                  <Text style={styles.recapDate}>{weeklyRecap.generatedAt}</Text>
+                </View>
+                <View style={styles.recapBadge}>
+                  <Text style={styles.recapBadgeText}>AI</Text>
+                </View>
+              </View>
+              <Text style={styles.recapSummary} numberOfLines={3}>
+                {weeklyRecap.summary}
+              </Text>
+              <View style={styles.recapHighlights}>
+                {weeklyRecap.highlights.slice(0, 2).map((highlight, index) => (
+                  <View key={index} style={styles.highlightItem}>
+                    <Text style={styles.highlightBullet}>•</Text>
+                    <Text style={styles.highlightText}>{highlight}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.recapAction}>Listen to full recap →</Text>
+              <Text style={styles.recapScribble}>{"~magic~"}</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Section header */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Vlogs</Text>
+            <Text style={styles.sectionSubtitle}>from your friends</Text>
+          </View>
+
+          {/* Vlog feed (still mock data) */}
+          {groupVlogs.length > 0 ? (
+            groupVlogs.map((vlog) => (
+              <TouchableOpacity key={vlog.id} style={styles.vlogCard} activeOpacity={0.9}>
+                <View style={styles.vlogThumbnail}>
+                  <View style={styles.vlogPlayButton}>
+                    <Text style={styles.vlogPlayIcon}>▶</Text>
+                  </View>
+                  <View style={styles.vlogDuration}>
+                    <Text style={styles.vlogDurationText}>{vlog.duration}</Text>
+                  </View>
+                  {!vlog.hasViewed && <View style={styles.vlogUnwatchedDot} />}
+                  <View style={styles.vlogThumbnailBorder} />
+                </View>
+
+                <View style={styles.vlogInfo}>
+                  <View style={styles.vlogUserRow}>
+                    <View style={styles.vlogUserAvatar}>
+                      <Text style={styles.vlogUserEmoji}>{vlog.userEmoji}</Text>
+                    </View>
+                    <View style={styles.vlogUserInfo}>
+                      <Text style={styles.vlogUserName}>{vlog.userName}</Text>
+                      <Text style={styles.vlogTimestamp}>{vlog.timestamp}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.vlogPrompt}>"{vlog.prompt}"</Text>
+
+                  <View style={styles.vlogActions}>
+                    <TouchableOpacity style={styles.vlogActionButton}>
+                      <Text style={styles.vlogActionText}>💬 Reply</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.vlogActionButton}>
+                      <Text style={styles.vlogActionText}>❤️</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyEmoji}>📭</Text>
+              <Text style={styles.emptyTitle}>No vlogs yet</Text>
+              <Text style={styles.emptySubtitle}>Be the first to share!</Text>
+            </View>
+          )}
+
+          <View style={{ height: 100 }} />
+        </ScrollView>
+
+        {/* Upload FAB */}
+        <TouchableOpacity style={styles.recordFab} activeOpacity={0.9} onPress={uploadVlog}>
+          <Text style={styles.recordFabIcon}>📤</Text>
+          <Text style={styles.recordFabText}>Upload</Text>
+        </TouchableOpacity>
       </View>
     </>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {

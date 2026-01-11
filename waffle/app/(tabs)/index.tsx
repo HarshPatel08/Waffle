@@ -30,22 +30,6 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Record prompt card */}
-      <TouchableOpacity style={styles.recordCard} activeOpacity={0.9}>
-        <View style={styles.recordContent}>
-          <Text style={styles.recordEmoji}>🎬</Text>
-          <View style={styles.recordTextContainer}>
-            <Text style={styles.recordTitle}>Today's prompt</Text>
-            <Text style={styles.recordPrompt}>"What made you smile today?"</Text>
-          </View>
-        </View>
-        <View style={styles.recordButton}>
-          <Text style={styles.recordButtonText}>Record</Text>
-        </View>
-        {/* Scribble decoration */}
-        <Text style={styles.recordScribble}>{"~tap~"}</Text>
-      </TouchableOpacity>
-
       {/* Groups section */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Your Groups</Text>

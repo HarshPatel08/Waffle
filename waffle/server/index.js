@@ -4,6 +4,8 @@ const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
+const groupRoutes = require('./routes/groups');
+const vlogRoutes = require('./routes/vlogs');
 
 const app = express();
 
@@ -13,6 +15,8 @@ app.use(express.json());
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/groups', groupRoutes);
+app.use('/api/vlogs', vlogRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
